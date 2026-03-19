@@ -1,4 +1,5 @@
 export type ModerationStatus = "pending" | "approved" | "rejected";
+export type SubmissionContentType = "text" | "photo" | "video";
 
 export interface SubmissionRecord {
   id: string;
@@ -6,6 +7,9 @@ export interface SubmissionRecord {
   username?: string;
   firstName?: string;
   text: string;
+  contentType: SubmissionContentType;
+  photoFileId?: string;
+  videoFileId?: string;
   createdAt: string;
   status: ModerationStatus;
   moderationMessageId?: number;

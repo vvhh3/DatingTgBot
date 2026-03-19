@@ -11,6 +11,31 @@ import {
 import type { SubmissionRecord } from "./types.js";
 
 const bot = new Telegraf(config.botToken);
+const pendingMediaDrafts = new Map<
+  number,
+  {
+    contentType: "photo" | "video";
+    photoFileId?: string;
+    videoFileId?: string;
+    createdAt: number;
+  }
+>();
+
+type ExtractedSubmissionContent =
+  | {
+      contentType: "text";
+      text: string;
+    }
+  | {
+      contentType: "photo";
+      text: string;
+      photoFileId: string;
+    }
+  | {
+      contentType: "video";
+      text: string;
+      videoFileId: string;
+    };
 
 function isTelegramErrorWithDescription(error: unknown, descriptionPart: string): boolean {
   if (!error || typeof error !== "object") {
@@ -19,6 +44,10 @@ function isTelegramErrorWithDescription(error: unknown, descriptionPart: string)
 
   const maybeResponse = (error as { response?: { description?: unknown } }).response;
   return typeof maybeResponse?.description === "string" && maybeResponse.description.includes(descriptionPart);
+}
+
+function isMessageNotModifiedError(error: unknown): boolean {
+  return isTelegramErrorWithDescription(error, "message is not modified");
 }
 
 function isAdmin(userId: number | undefined): boolean {
@@ -33,24 +62,40 @@ function isAdmin(userId: number | undefined): boolean {
   return config.adminUserIds.has(userId);
 }
 
-function getMessageText(ctx: Context): string | undefined {
+function extractSubmissionContent(ctx: Context): ExtractedSubmissionContent | undefined {
   if (!("message" in ctx.update) || !ctx.message) {
     return undefined;
   }
 
-  if ("text" in ctx.message && typeof ctx.message.text === "string") {
-    return ctx.message.text;
+  if ("photo" in ctx.message && Array.isArray(ctx.message.photo) && ctx.message.photo.length > 0) {
+    const largestPhoto = ctx.message.photo[ctx.message.photo.length - 1];
+    const caption = typeof ctx.message.caption === "string" ? ctx.message.caption.trim() : "";
+
+    return {
+      contentType: "photo",
+      text: caption,
+      photoFileId: largestPhoto.file_id
+    };
   }
 
-  if ("caption" in ctx.message && typeof ctx.message.caption === "string") {
-    return ctx.message.caption;
+  if ("video" in ctx.message && ctx.message.video) {
+    const caption = typeof ctx.message.caption === "string" ? ctx.message.caption.trim() : "";
+
+    return {
+      contentType: "video",
+      text: caption,
+      videoFileId: ctx.message.video.file_id
+    };
+  }
+
+  if ("text" in ctx.message && typeof ctx.message.text === "string") {
+    return {
+      contentType: "text",
+      text: ctx.message.text
+    };
   }
 
   return undefined;
-}
-
-function formatUsername(username: string | undefined): string {
-  return username ? `@${username}` : "не указан";
 }
 
 function formatPerson(username: string | undefined, firstName: string | undefined): string {
@@ -76,6 +121,28 @@ function formatDecision(status: SubmissionRecord["status"]): string {
   }
 }
 
+function formatDateTime(value: string | undefined): string {
+  if (!value) {
+    return "не указано";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return new Intl.DateTimeFormat("ru-RU", {
+    timeZone: config.displayTimeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  }).format(date);
+}
+
 function formatModerator(submission: SubmissionRecord): string {
   if (!submission.moderatedByUserId && !submission.moderatedByUsername && !submission.moderatedByFirstName) {
     return "ещё не назначен";
@@ -84,18 +151,30 @@ function formatModerator(submission: SubmissionRecord): string {
   return formatPerson(submission.moderatedByUsername, submission.moderatedByFirstName);
 }
 
+function formatContentType(submission: SubmissionRecord): string {
+  switch (submission.contentType) {
+    case "photo":
+      return "Фото";
+    case "video":
+      return "Видео";
+    default:
+      return "Текст";
+  }
+}
+
 function buildModerationCaption(submission: SubmissionRecord): string {
   return [
     "Новая анонимная заявка",
     "",
     `ID: ${submission.id}`,
+    `Тип заявки: ${formatContentType(submission)}`,
     `Отправитель: ${formatPerson(submission.username, submission.firstName)}`,
     `Статус: ${formatDecision(submission.status)}`,
     `Решение принял: ${formatModerator(submission)}`,
-    submission.moderatedAt ? `Время решения: ${submission.moderatedAt}` : "",
+    submission.moderatedAt ? `Время решения: ${formatDateTime(submission.moderatedAt)}` : "",
     submission.rejectionReason ? `Причина отклонения: ${submission.rejectionReason}` : "",
     "",
-    `Текст сообщения: ${submission.text}`,
+    `Текст сообщения: ${submission.text}`
   ].filter(Boolean).join("\n");
 }
 
@@ -108,15 +187,104 @@ function moderationKeyboard(submissionId: string) {
   ]);
 }
 
+async function sendToModeration(ctx: Context, submission: SubmissionRecord) {
+  const keyboard = moderationKeyboard(submission.id);
+
+  if (submission.contentType === "photo" && submission.photoFileId) {
+    return ctx.telegram.sendPhoto(config.moderationChatId, submission.photoFileId, {
+      caption: buildModerationCaption(submission),
+      ...keyboard
+    });
+  }
+
+  if (submission.contentType === "video" && submission.videoFileId) {
+    return ctx.telegram.sendVideo(config.moderationChatId, submission.videoFileId, {
+      caption: buildModerationCaption(submission),
+      ...keyboard
+    });
+  }
+
+  return ctx.telegram.sendMessage(
+    config.moderationChatId,
+    buildModerationCaption(submission),
+    keyboard
+  );
+}
+
+async function publishSubmission(ctx: Context, submission: SubmissionRecord) {
+  if (submission.contentType === "photo" && submission.photoFileId) {
+    return ctx.telegram.sendPhoto(config.targetChatId, submission.photoFileId, {
+      caption: submission.text || undefined
+    });
+  }
+
+  if (submission.contentType === "video" && submission.videoFileId) {
+    return ctx.telegram.sendVideo(config.targetChatId, submission.videoFileId, {
+      caption: submission.text || undefined
+    });
+  }
+
+  return ctx.telegram.sendMessage(config.targetChatId, submission.text);
+}
+
+async function updateModerationMessage(submission: SubmissionRecord): Promise<void> {
+  if (!submission.moderationMessageId) {
+    return;
+  }
+
+  if (submission.contentType === "photo" || submission.contentType === "video") {
+    await bot.telegram.editMessageCaption(
+      config.moderationChatId,
+      submission.moderationMessageId,
+      undefined,
+      buildModerationCaption(submission)
+    );
+  } else {
+    await bot.telegram.editMessageText(
+      config.moderationChatId,
+      submission.moderationMessageId,
+      undefined,
+      buildModerationCaption(submission)
+    );
+  }
+
+  try {
+    await bot.telegram.editMessageReplyMarkup(
+      config.moderationChatId,
+      submission.moderationMessageId,
+      undefined,
+      undefined
+    );
+  } catch (error) {
+    if (!isMessageNotModifiedError(error)) {
+      throw error;
+    }
+  }
+}
+
 bot.start(async (ctx) => {
   await ctx.reply(
     [
       "Присылай сообщение сюда, и я отправлю его анонимно в предложку после проверки.",
+      "Можно отправлять обычный текст, фото или видео с подписью, либо сначала медиа, а следующим сообщением текст.",
       "Запрещены: 18+, оскорбления, экстремизм, ссылки и контакты.",
-      "Сейчас поддерживается обычный текст или подпись к медиа.",
-      "Команда /chatid покажет ID текущего чата и твой user ID."
+      "Команда /chatid покажет ID текущего чата и твой user ID.",
+      "Команда /cancel удалит сохранённый черновик медиа."
     ].join("\n")
   );
+});
+
+bot.command("cancel", async (ctx) => {
+  if (!ctx.from) {
+    return;
+  }
+
+  if (pendingMediaDrafts.delete(ctx.from.id)) {
+    await ctx.reply("Черновик медиа удалён.");
+    return;
+  }
+
+  await ctx.reply("Сохранённого черновика медиа сейчас нет.");
 });
 
 bot.command("chatid", async (ctx) => {
@@ -141,14 +309,41 @@ bot.on("message", async (ctx) => {
     return;
   }
 
-  const text = getMessageText(ctx);
+  const content = extractSubmissionContent(ctx);
 
-  if (!text) {
-    await ctx.reply("Пока что я принимаю только текстовые сообщения или подписи к медиа.");
+  if (!content) {
+    await ctx.reply("Пока что я принимаю только обычный текст, фото или видео с подписью.");
     return;
   }
 
-  const result = moderateText(text);
+  if ((content.contentType === "photo" || content.contentType === "video") && !content.text) {
+    pendingMediaDrafts.set(ctx.from.id, {
+      contentType: content.contentType,
+      photoFileId: content.contentType === "photo" ? content.photoFileId : undefined,
+      videoFileId: content.contentType === "video" ? content.videoFileId : undefined,
+      createdAt: Date.now()
+    });
+    await ctx.reply("Медиа сохранено. Теперь отправь следующим сообщением текст для этой заявки.");
+    return;
+  }
+
+  const pendingMediaDraft = pendingMediaDrafts.get(ctx.from.id);
+  const submissionContent =
+    content.contentType === "text" && pendingMediaDraft
+      ? pendingMediaDraft.contentType === "photo"
+        ? {
+            contentType: "photo" as const,
+            text: content.text,
+            photoFileId: pendingMediaDraft.photoFileId as string
+          }
+        : {
+            contentType: "video" as const,
+            text: content.text,
+            videoFileId: pendingMediaDraft.videoFileId as string
+          }
+      : content;
+
+  const result = moderateText(submissionContent.text);
 
   if (!result.allowed) {
     if (result.reasons.includes("too_long")) {
@@ -164,18 +359,19 @@ bot.on("message", async (ctx) => {
     userId: ctx.from.id,
     username: ctx.from.username,
     firstName: ctx.from.first_name,
-    text
+    text: submissionContent.text,
+    contentType: submissionContent.contentType,
+    photoFileId: submissionContent.contentType === "photo" ? submissionContent.photoFileId : undefined,
+    videoFileId: submissionContent.contentType === "video" ? submissionContent.videoFileId : undefined
   });
 
-  const moderationMessage = await ctx.telegram.sendMessage(
-    config.moderationChatId,
-    buildModerationCaption(record),
-    moderationKeyboard(record.id)
-  );
+  const moderationMessage = await sendToModeration(ctx, record);
 
   await updateSubmission(record.id, {
     moderationMessageId: moderationMessage.message_id
   });
+
+  pendingMediaDrafts.delete(ctx.from.id);
 
   await ctx.reply("Сообщение принято и отправлено на модерацию анонимно.");
 });
@@ -207,7 +403,7 @@ bot.action(/^approve:(.+)$/, async (ctx) => {
   const moderatedAt = new Date().toISOString();
 
   try {
-    published = await ctx.telegram.sendMessage(config.targetChatId, submission.text);
+    published = await publishSubmission(ctx, submission);
   } catch (error) {
     if (isTelegramErrorWithDescription(error, "chat not found")) {
       await ctx.reply(
@@ -224,18 +420,15 @@ bot.action(/^approve:(.+)$/, async (ctx) => {
   }
 
   const updatedSubmission = await updateModerationStatus(submission.id, "approved", {
-    publishedMessageId: published.message_id
-    ,
+    publishedMessageId: published.message_id,
     moderatedByUserId: ctx.from.id,
     moderatedByUsername: ctx.from.username,
     moderatedByFirstName: ctx.from.first_name,
     moderatedAt
   });
 
-  if (ctx.callbackQuery.message && updatedSubmission) {
-    await ctx.editMessageText(
-      buildModerationCaption(updatedSubmission)
-    );
+  if (updatedSubmission) {
+    await updateModerationMessage(updatedSubmission);
   }
 
   await ctx.telegram.sendMessage(
@@ -275,10 +468,8 @@ bot.action(/^reject:(.+)$/, async (ctx) => {
     moderatedAt: new Date().toISOString()
   });
 
-  if (ctx.callbackQuery.message && updatedSubmission) {
-    await ctx.editMessageText(
-      buildModerationCaption(updatedSubmission)
-    );
+  if (updatedSubmission) {
+    await updateModerationMessage(updatedSubmission);
   }
 
   await ctx.telegram.sendMessage(

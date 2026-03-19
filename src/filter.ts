@@ -9,6 +9,7 @@ const suspiciousLinks = /(https?:\/\/|t\.me\/|telegram\.me\/|wa\.me\/)/iu;
 const obfuscationSeparators = /[\s._,*+\-|\\/]+/gu;
 const obfuscatedRunPattern =
   /(?<![\p{L}\p{N}_])(?:[\p{L}\p{N}](?:[\s._,*+\-|\\/]+[\p{L}\p{N}]){2,})(?![\p{L}\p{N}_])/gu;
+const intraWordSeparatorPattern = /(?<=[\p{L}\p{N}])[._,*+\-|\\/]+(?=[\p{L}\p{N}])/gu;
 
 const confusableMap = new Map<string, string>([
   ["а", "a"],
@@ -99,6 +100,73 @@ function compactObfuscatedRuns(text: string): string {
   return text.replace(obfuscatedRunPattern, (match) => match.replace(obfuscationSeparators, ""));
 }
 
+function compactIntraWordSeparators(text: string): string {
+  return text.replace(intraWordSeparatorPattern, "");
+}
+
+function tokenizeWords(text: string): string[] {
+  return text.match(/[\p{L}\p{N}]+/gu) ?? [];
+}
+
+function isSingleWordTerm(term: string): boolean {
+  return !/\s/u.test(term);
+}
+
+function isApproximateMatch(source: string, target: string): boolean {
+  if (source === target) {
+    return true;
+  }
+
+  if (Math.abs(source.length - target.length) > 1) {
+    return false;
+  }
+
+  if (source.length < 5 || target.length < 5) {
+    return false;
+  }
+
+  if (source[0] !== target[0] || source[source.length - 1] !== target[target.length - 1]) {
+    return false;
+  }
+
+  let indexA = 0;
+  let indexB = 0;
+  let edits = 0;
+
+  while (indexA < source.length && indexB < target.length) {
+    if (source[indexA] === target[indexB]) {
+      indexA += 1;
+      indexB += 1;
+      continue;
+    }
+
+    edits += 1;
+
+    if (edits > 1) {
+      return false;
+    }
+
+    if (source.length > target.length) {
+      indexA += 1;
+      continue;
+    }
+
+    if (source.length < target.length) {
+      indexB += 1;
+      continue;
+    }
+
+    indexA += 1;
+    indexB += 1;
+  }
+
+  if (indexA < source.length || indexB < target.length) {
+    edits += 1;
+  }
+
+  return edits <= 1;
+}
+
 function loadBannedTerms(): string[] {
   let content: string;
 
@@ -122,6 +190,7 @@ const bannedPatterns = loadBannedTerms().map((term) => {
 
   return {
     term,
+    normalizedTerm,
     pattern: wholeWord(escapeForRegex(normalizedTerm))
   };
 });
@@ -131,6 +200,13 @@ export function moderateText(input: string): FilterResult {
   const confusableSkeleton = toConfusableSkeleton(text);
   const mergedSpacedLetters = mergeSpacedLetterRuns(confusableSkeleton);
   const compactedObfuscatedRuns = compactObfuscatedRuns(confusableSkeleton);
+  const compactedIntraWordSeparators = compactIntraWordSeparators(compactedObfuscatedRuns);
+  const wordTokens = new Set([
+    ...tokenizeWords(confusableSkeleton),
+    ...tokenizeWords(mergedSpacedLetters),
+    ...tokenizeWords(compactedObfuscatedRuns),
+    ...tokenizeWords(compactedIntraWordSeparators)
+  ]);
   const reasons: string[] = [];
 
   if (!text) {
@@ -150,7 +226,10 @@ export function moderateText(input: string): FilterResult {
       (entry) =>
         entry.pattern.test(confusableSkeleton) ||
         entry.pattern.test(mergedSpacedLetters) ||
-        entry.pattern.test(compactedObfuscatedRuns)
+        entry.pattern.test(compactedObfuscatedRuns) ||
+        entry.pattern.test(compactedIntraWordSeparators) ||
+        (isSingleWordTerm(entry.normalizedTerm) &&
+          [...wordTokens].some((token) => isApproximateMatch(token, entry.normalizedTerm)))
     )
   ) {
     reasons.push("forbidden_content");

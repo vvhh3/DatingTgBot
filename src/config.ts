@@ -38,9 +38,15 @@ function parseAdminIds(raw: string | undefined): Set<number> {
   return new Set(ids);
 }
 
+function parseTimeZone(raw: string | undefined): string {
+  const value = raw?.trim();
+  return value || Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Moscow";
+}
+
 export const config = {
   botToken: requireEnv("BOT_TOKEN"),
   moderationChatId: parseChatId("MODERATION_CHAT_ID"),
   targetChatId: parseChatId("TARGET_CHAT_ID"),
-  adminUserIds: parseAdminIds(process.env.ADMIN_USER_IDS)
+  adminUserIds: parseAdminIds(process.env.ADMIN_USER_IDS),
+  displayTimeZone: parseTimeZone(process.env.DISPLAY_TIMEZONE)
 };
