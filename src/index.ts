@@ -11,6 +11,8 @@ import {
 import type { SubmissionRecord } from "./types.js";
 
 const bot = new Telegraf(config.botToken);
+const submissionCooldownMs = config.submissionCooldownSeconds * 1000;
+const lastSubmissionAt = new Map<number, number>();
 const pendingMediaDrafts = new Map<
   number,
   {
@@ -60,6 +62,22 @@ function isAdmin(userId: number | undefined): boolean {
   }
 
   return config.adminUserIds.has(userId);
+}
+
+function getCooldownRemainingSeconds(userId: number): number {
+  const lastSentAt = lastSubmissionAt.get(userId);
+
+  if (!lastSentAt || submissionCooldownMs <= 0) {
+    return 0;
+  }
+
+  const remainingMs = lastSentAt + submissionCooldownMs - Date.now();
+
+  if (remainingMs <= 0) {
+    return 0;
+  }
+
+  return Math.ceil(remainingMs / 1000);
 }
 
 function extractSubmissionContent(ctx: Context): ExtractedSubmissionContent | undefined {
@@ -267,6 +285,7 @@ bot.start(async (ctx) => {
     [
       "Присылай сообщение сюда, и я отправлю его анонимно в предложку после проверки.",
       "Можно отправлять обычный текст, фото или видео с подписью, либо сначала медиа, а следующим сообщением текст.",
+      `Между новыми заявками действует пауза ${config.submissionCooldownSeconds} сек.`,
       "Запрещены: 18+, оскорбления, экстремизм, ссылки и контакты.",
       "Команда /chatid покажет ID текущего чата и твой user ID.",
       "Команда /cancel удалит сохранённый черновик медиа."
@@ -328,6 +347,17 @@ bot.on("message", async (ctx) => {
   }
 
   const pendingMediaDraft = pendingMediaDrafts.get(ctx.from.id);
+  const isCompletingPendingDraft = content.contentType === "text" && Boolean(pendingMediaDraft);
+
+  if (!isCompletingPendingDraft) {
+    const remainingSeconds = getCooldownRemainingSeconds(ctx.from.id);
+
+    if (remainingSeconds > 0) {
+      await ctx.reply(`Подожди ${remainingSeconds} сек. перед следующей заявкой.`);
+      return;
+    }
+  }
+
   const submissionContent =
     content.contentType === "text" && pendingMediaDraft
       ? pendingMediaDraft.contentType === "photo"
@@ -371,6 +401,7 @@ bot.on("message", async (ctx) => {
     moderationMessageId: moderationMessage.message_id
   });
 
+  lastSubmissionAt.set(ctx.from.id, Date.now());
   pendingMediaDrafts.delete(ctx.from.id);
 
   await ctx.reply("Сообщение принято и отправлено на модерацию анонимно.");

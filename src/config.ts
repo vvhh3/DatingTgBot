@@ -43,10 +43,27 @@ function parseTimeZone(raw: string | undefined): string {
   return value || Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Moscow";
 }
 
+function parseCooldownSeconds(raw: string | undefined): number {
+  const value = raw?.trim();
+
+  if (!value) {
+    return 15;
+  }
+
+  const parsed = Number(value);
+
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    throw new Error("Env var SUBMISSION_COOLDOWN_SECONDS must be a non-negative integer");
+  }
+
+  return parsed;
+}
+
 export const config = {
   botToken: requireEnv("BOT_TOKEN"),
   moderationChatId: parseChatId("MODERATION_CHAT_ID"),
   targetChatId: parseChatId("TARGET_CHAT_ID"),
   adminUserIds: parseAdminIds(process.env.ADMIN_USER_IDS),
-  displayTimeZone: parseTimeZone(process.env.DISPLAY_TIMEZONE)
+  displayTimeZone: parseTimeZone(process.env.DISPLAY_TIMEZONE),
+  submissionCooldownSeconds: parseCooldownSeconds(process.env.SUBMISSION_COOLDOWN_SECONDS)
 };
