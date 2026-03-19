@@ -8,6 +8,7 @@ import {
   updateModerationStatus,
   updateSubmission
 } from "./storage.js";
+import type { SubmissionRecord } from "./types.js";
 
 const bot = new Telegraf(config.botToken);
 
@@ -48,14 +49,54 @@ function getMessageText(ctx: Context): string | undefined {
   return undefined;
 }
 
-function buildModerationCaption(submissionId: string, text: string): string {
+function formatUsername(username: string | undefined): string {
+  return username ? `@${username}` : "не указан";
+}
+
+function formatPerson(username: string | undefined, firstName: string | undefined): string {
+  if (username) {
+    return `@${username}`;
+  }
+
+  if (firstName) {
+    return firstName;
+  }
+
+  return "не указано";
+}
+
+function formatDecision(status: SubmissionRecord["status"]): string {
+  switch (status) {
+    case "approved":
+      return "Одобрено";
+    case "rejected":
+      return "Отклонено";
+    default:
+      return "На модерации";
+  }
+}
+
+function formatModerator(submission: SubmissionRecord): string {
+  if (!submission.moderatedByUserId && !submission.moderatedByUsername && !submission.moderatedByFirstName) {
+    return "ещё не назначен";
+  }
+
+  return formatPerson(submission.moderatedByUsername, submission.moderatedByFirstName);
+}
+
+function buildModerationCaption(submission: SubmissionRecord): string {
   return [
     "Новая анонимная заявка",
     "",
-    `ID: ${submissionId}`,
+    `ID: ${submission.id}`,
+    `Отправитель: ${formatPerson(submission.username, submission.firstName)}`,
+    `Статус: ${formatDecision(submission.status)}`,
+    `Решение принял: ${formatModerator(submission)}`,
+    submission.moderatedAt ? `Время решения: ${submission.moderatedAt}` : "",
+    submission.rejectionReason ? `Причина отклонения: ${submission.rejectionReason}` : "",
     "",
-    text
-  ].join("\n");
+    `Текст сообщения: ${submission.text}`,
+  ].filter(Boolean).join("\n");
 }
 
 function moderationKeyboard(submissionId: string) {
@@ -128,7 +169,7 @@ bot.on("message", async (ctx) => {
 
   const moderationMessage = await ctx.telegram.sendMessage(
     config.moderationChatId,
-    buildModerationCaption(record.id, record.text),
+    buildModerationCaption(record),
     moderationKeyboard(record.id)
   );
 
@@ -163,6 +204,7 @@ bot.action(/^approve:(.+)$/, async (ctx) => {
   await ctx.answerCbQuery("Публикую...");
 
   let published;
+  const moderatedAt = new Date().toISOString();
 
   try {
     published = await ctx.telegram.sendMessage(config.targetChatId, submission.text);
@@ -181,19 +223,18 @@ bot.action(/^approve:(.+)$/, async (ctx) => {
     throw error;
   }
 
-  await updateModerationStatus(submission.id, "approved", {
+  const updatedSubmission = await updateModerationStatus(submission.id, "approved", {
     publishedMessageId: published.message_id
+    ,
+    moderatedByUserId: ctx.from.id,
+    moderatedByUsername: ctx.from.username,
+    moderatedByFirstName: ctx.from.first_name,
+    moderatedAt
   });
 
-  if (ctx.callbackQuery.message) {
+  if (ctx.callbackQuery.message && updatedSubmission) {
     await ctx.editMessageText(
-      [
-        "Заявка опубликована",
-        "",
-        `ID: ${submission.id}`,
-        "",
-        submission.text
-      ].join("\n")
+      buildModerationCaption(updatedSubmission)
     );
   }
 
@@ -226,19 +267,17 @@ bot.action(/^reject:(.+)$/, async (ctx) => {
 
   await ctx.answerCbQuery("Отклоняю...");
 
-  await updateModerationStatus(submission.id, "rejected", {
-    rejectionReason: "Отклонено модератором"
+  const updatedSubmission = await updateModerationStatus(submission.id, "rejected", {
+    rejectionReason: "Отклонено модератором",
+    moderatedByUserId: ctx.from.id,
+    moderatedByUsername: ctx.from.username,
+    moderatedByFirstName: ctx.from.first_name,
+    moderatedAt: new Date().toISOString()
   });
 
-  if (ctx.callbackQuery.message) {
+  if (ctx.callbackQuery.message && updatedSubmission) {
     await ctx.editMessageText(
-      [
-        "Заявка отклонена",
-        "",
-        `ID: ${submission.id}`,
-        "",
-        submission.text
-      ].join("\n")
+      buildModerationCaption(updatedSubmission)
     );
   }
 

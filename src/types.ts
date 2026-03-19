@@ -11,6 +11,10 @@ export interface SubmissionRecord {
   moderationMessageId?: number;
   publishedMessageId?: number;
   rejectionReason?: string;
+  moderatedByUserId?: number;
+  moderatedByUsername?: string;
+  moderatedByFirstName?: string;
+  moderatedAt?: string;
 }
 
 export interface FilterResult {

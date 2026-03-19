@@ -1,41 +1,154 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
 import crypto from "node:crypto";
+import { mkdirSync } from "node:fs";
+import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import type { ModerationStatus, SubmissionRecord } from "./types.js";
 
 const dataDir = path.resolve("data");
-const dataFile = path.join(dataDir, "submissions.json");
+const databaseFile = path.join(dataDir, "submissions.db");
 
-async function ensureStorageFile(): Promise<void> {
-  await mkdir(dataDir, { recursive: true });
+type SubmissionRow = {
+  id: string;
+  user_id: number;
+  username: string | null;
+  first_name: string | null;
+  text: string;
+  created_at: string;
+  status: ModerationStatus;
+  moderation_message_id: number | null;
+  published_message_id: number | null;
+  rejection_reason: string | null;
+  moderated_by_user_id: number | null;
+  moderated_by_username: string | null;
+  moderated_by_first_name: string | null;
+  moderated_at: string | null;
+};
 
-  try {
-    await readFile(dataFile, "utf8");
-  } catch {
-    await writeFile(dataFile, "[]", "utf8");
+mkdirSync(dataDir, { recursive: true });
+
+const db = new DatabaseSync(databaseFile);
+
+db.exec(`
+  CREATE TABLE IF NOT EXISTS submissions (
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL,
+    username TEXT,
+    first_name TEXT,
+    text TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    status TEXT NOT NULL,
+    moderation_message_id INTEGER,
+    published_message_id INTEGER,
+    rejection_reason TEXT,
+    moderated_by_user_id INTEGER,
+    moderated_by_username TEXT,
+    moderated_by_first_name TEXT,
+    moderated_at TEXT
+  )
+`);
+
+const insertSubmissionStatement = db.prepare(`
+  INSERT INTO submissions (
+    id,
+    user_id,
+    username,
+    first_name,
+    text,
+    created_at,
+    status,
+    moderation_message_id,
+    published_message_id,
+    rejection_reason,
+    moderated_by_user_id,
+    moderated_by_username,
+    moderated_by_first_name,
+    moderated_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`);
+
+const selectSubmissionStatement = db.prepare(`
+  SELECT
+    id,
+    user_id,
+    username,
+    first_name,
+    text,
+    created_at,
+    status,
+    moderation_message_id,
+    published_message_id,
+    rejection_reason,
+    moderated_by_user_id,
+    moderated_by_username,
+    moderated_by_first_name,
+    moderated_at
+  FROM submissions
+  WHERE id = ?
+`);
+
+const updateSubmissionStatement = db.prepare(`
+  UPDATE submissions
+  SET
+    user_id = ?,
+    username = ?,
+    first_name = ?,
+    text = ?,
+    created_at = ?,
+    status = ?,
+    moderation_message_id = ?,
+    published_message_id = ?,
+    rejection_reason = ?,
+    moderated_by_user_id = ?,
+    moderated_by_username = ?,
+    moderated_by_first_name = ?,
+    moderated_at = ?
+  WHERE id = ?
+`);
+
+function rowToSubmission(row: SubmissionRow | undefined): SubmissionRecord | undefined {
+  if (!row) {
+    return undefined;
   }
+
+  return {
+    id: row.id,
+    userId: row.user_id,
+    username: row.username ?? undefined,
+    firstName: row.first_name ?? undefined,
+    text: row.text,
+    createdAt: row.created_at,
+    status: row.status,
+    moderationMessageId: row.moderation_message_id ?? undefined,
+    publishedMessageId: row.published_message_id ?? undefined,
+    rejectionReason: row.rejection_reason ?? undefined,
+    moderatedByUserId: row.moderated_by_user_id ?? undefined,
+    moderatedByUsername: row.moderated_by_username ?? undefined,
+    moderatedByFirstName: row.moderated_by_first_name ?? undefined,
+    moderatedAt: row.moderated_at ?? undefined
+  };
 }
 
-async function readAll(): Promise<SubmissionRecord[]> {
-  await ensureStorageFile();
-  const content = await readFile(dataFile, "utf8");
-
-  try {
-    return JSON.parse(content) as SubmissionRecord[];
-  } catch {
-    return [];
-  }
-}
-
-async function writeAll(records: SubmissionRecord[]): Promise<void> {
-  await ensureStorageFile();
-  await writeFile(dataFile, JSON.stringify(records, null, 2), "utf8");
+function submissionToParams(record: SubmissionRecord): Array<number | string | null> {
+  return [
+    record.userId,
+    record.username ?? null,
+    record.firstName ?? null,
+    record.text,
+    record.createdAt,
+    record.status,
+    record.moderationMessageId ?? null,
+    record.publishedMessageId ?? null,
+    record.rejectionReason ?? null,
+    record.moderatedByUserId ?? null,
+    record.moderatedByUsername ?? null,
+    record.moderatedByFirstName ?? null,
+    record.moderatedAt ?? null
+  ];
 }
 
 export async function createSubmission(
   payload: Omit<SubmissionRecord, "id" | "createdAt" | "status">
 ): Promise<SubmissionRecord> {
-  const records = await readAll();
   const record: SubmissionRecord = {
     ...payload,
     id: crypto.randomUUID(),
@@ -43,34 +156,40 @@ export async function createSubmission(
     status: "pending"
   };
 
-  records.push(record);
-  await writeAll(records);
+  insertSubmissionStatement.run(
+    record.id,
+    ...submissionToParams(record)
+  );
+
   return record;
 }
 
 export async function getSubmission(id: string): Promise<SubmissionRecord | undefined> {
-  const records = await readAll();
-  return records.find((record) => record.id === id);
+  return rowToSubmission(selectSubmissionStatement.get(id) as SubmissionRow | undefined);
 }
 
 export async function updateSubmission(
   id: string,
   updates: Partial<SubmissionRecord>
 ): Promise<SubmissionRecord | undefined> {
-  const records = await readAll();
-  const index = records.findIndex((record) => record.id === id);
+  const existingRecord = await getSubmission(id);
 
-  if (index === -1) {
+  if (!existingRecord) {
     return undefined;
   }
 
-  records[index] = {
-    ...records[index],
-    ...updates
+  const nextRecord: SubmissionRecord = {
+    ...existingRecord,
+    ...updates,
+    id: existingRecord.id
   };
 
-  await writeAll(records);
-  return records[index];
+  updateSubmissionStatement.run(
+    ...submissionToParams(nextRecord),
+    nextRecord.id
+  );
+
+  return nextRecord;
 }
 
 export async function updateModerationStatus(
