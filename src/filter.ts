@@ -1,9 +1,14 @@
-import { bannedCategories, type BannedTerm } from "./banned-terms.js";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import type { FilterResult } from "./types.js";
 
 const MAX_TEXT_LENGTH = 900;
 const WORD_CHAR_CLASS = "\\p{L}\\p{N}_";
+const BANNED_TERMS_FILE = path.resolve("data", "banned-terms.txt");
 const suspiciousLinks = /(https?:\/\/|t\.me\/|telegram\.me\/|wa\.me\/)/iu;
+const obfuscationSeparators = /[\s._,*+\-|\\/]+/gu;
+const obfuscatedRunPattern =
+  /(?<![\p{L}\p{N}_])(?:[\p{L}\p{N}](?:[\s._,*+\-|\\/]+[\p{L}\p{N}]){2,})(?![\p{L}\p{N}_])/gu;
 
 const confusableMap = new Map<string, string>([
   ["а", "a"],
@@ -14,6 +19,8 @@ const confusableMap = new Map<string, string>([
   ["k", "k"],
   ["м", "m"],
   ["m", "m"],
+  ["н", "h"],
+  ["h", "h"],
   ["о", "o"],
   ["o", "o"],
   ["р", "p"],
@@ -25,23 +32,17 @@ const confusableMap = new Map<string, string>([
   ["у", "y"],
   ["y", "y"],
   ["х", "x"],
-  ["x", "x"]
+  ["x", "x"],
+  ["в", "b"],
+  ["b", "b"]
 ]);
 
 function wholeWord(pattern: string): RegExp {
   return new RegExp(`(?<![${WORD_CHAR_CLASS}])(?:${pattern})(?![${WORD_CHAR_CLASS}])`, "iu");
 }
 
-function wordStem(pattern: string): RegExp {
-  return new RegExp(`(?<![${WORD_CHAR_CLASS}])(?:${pattern})[${WORD_CHAR_CLASS}]*`, "iu");
-}
-
 function escapeForRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function normalizePhraseValue(value: string): string {
-  return escapeForRegex(value).replace(/\s+/g, "\\s+");
 }
 
 function normalizeText(text: string): string {
@@ -57,59 +58,106 @@ function toConfusableSkeleton(text: string): string {
   return [...text].map((char) => confusableMap.get(char) ?? char).join("");
 }
 
-function createPattern(term: BannedTerm): RegExp {
-  const normalizedValue = normalizeText(term.value);
-  const matchValue = term.useConfusableSkeleton ? toConfusableSkeleton(normalizedValue) : normalizedValue;
-  const preparedValue = term.mode === "phrase" ? normalizePhraseValue(matchValue) : escapeForRegex(matchValue);
-
-  switch (term.mode) {
-    case "word":
-      return wholeWord(preparedValue);
-    case "stem":
-      return wordStem(preparedValue);
-    case "phrase":
-      return wholeWord(preparedValue);
-  }
+function isSingleLetterToken(token: string): boolean {
+  return /^[\p{L}\p{N}]$/u.test(token);
 }
 
-const categoryRules = bannedCategories.map((category) => ({
-  reason: category.reason,
-  terms: category.terms.map((term) => ({
-    ...term,
-    pattern: createPattern(term)
-  }))
-}));
+function mergeSpacedLetterRuns(text: string): string {
+  const tokens = text.split(" ").filter(Boolean);
+  const merged: string[] = [];
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index];
+
+    if (!isSingleLetterToken(token)) {
+      merged.push(token);
+      continue;
+    }
+
+    const run: string[] = [token];
+    let nextIndex = index + 1;
+
+    while (nextIndex < tokens.length && isSingleLetterToken(tokens[nextIndex])) {
+      run.push(tokens[nextIndex]);
+      nextIndex += 1;
+    }
+
+    if (run.length >= 3) {
+      merged.push(run.join(""));
+      index = nextIndex - 1;
+      continue;
+    }
+
+    merged.push(...run);
+    index = nextIndex - 1;
+  }
+
+  return merged.join(" ");
+}
+
+function compactObfuscatedRuns(text: string): string {
+  return text.replace(obfuscatedRunPattern, (match) => match.replace(obfuscationSeparators, ""));
+}
+
+function loadBannedTerms(): string[] {
+  let content: string;
+
+  try {
+    content = readFileSync(BANNED_TERMS_FILE, "utf8");
+  } catch (error) {
+    throw new Error(`Cannot read banned terms file: ${BANNED_TERMS_FILE}`, { cause: error });
+  }
+
+  return content
+    .split(/\r?\n/)
+    .map((line) => line.replace(/#.*$/, "").trim())
+    .filter(Boolean)
+    .flatMap((line) => line.split(","))
+    .map((item) => normalizeText(item))
+    .filter(Boolean);
+}
+
+const bannedPatterns = loadBannedTerms().map((term) => {
+  const normalizedTerm = toConfusableSkeleton(term);
+
+  return {
+    term,
+    pattern: wholeWord(escapeForRegex(normalizedTerm))
+  };
+});
 
 export function moderateText(input: string): FilterResult {
   const text = normalizeText(input);
   const confusableSkeleton = toConfusableSkeleton(text);
+  const mergedSpacedLetters = mergeSpacedLetterRuns(confusableSkeleton);
+  const compactedObfuscatedRuns = compactObfuscatedRuns(confusableSkeleton);
   const reasons: string[] = [];
 
   if (!text) {
-    reasons.push("пустое сообщение");
+    reasons.push("empty");
   }
 
   if (text.length > MAX_TEXT_LENGTH) {
-    reasons.push(`слишком длинное сообщение (максимум ${MAX_TEXT_LENGTH} символов)`);
+    reasons.push("too_long");
   }
 
   if (suspiciousLinks.test(text)) {
-    reasons.push("ссылки и внешние контакты запрещены");
+    reasons.push("forbidden_content");
   }
 
-  for (const rule of categoryRules) {
-    const matched = rule.terms.some((term) => {
-      const targetText = term.useConfusableSkeleton ? confusableSkeleton : text;
-      return term.pattern.test(targetText);
-    });
-
-    if (matched) {
-      reasons.push(rule.reason);
-    }
+  if (
+    bannedPatterns.some(
+      (entry) =>
+        entry.pattern.test(confusableSkeleton) ||
+        entry.pattern.test(mergedSpacedLetters) ||
+        entry.pattern.test(compactedObfuscatedRuns)
+    )
+  ) {
+    reasons.push("forbidden_content");
   }
 
   return {
     allowed: reasons.length === 0,
-    reasons
+    reasons: [...new Set(reasons)]
   };
 }

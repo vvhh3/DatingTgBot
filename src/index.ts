@@ -110,12 +110,12 @@ bot.on("message", async (ctx) => {
   const result = moderateText(text);
 
   if (!result.allowed) {
-    await ctx.reply(
-      [
-        "Сообщение не прошло автоматическую проверку.",
-        `Причины: ${result.reasons.join(", ")}`
-      ].join("\n")
-    );
+    if (result.reasons.includes("too_long")) {
+      await ctx.reply("Сообщение слишком длинное. Сократи текст и попробуй ещё раз.");
+      return;
+    }
+
+    await ctx.reply("В твоём сообщении присутствуют запрещённые слова, выражения или ссылки. Измени текст и отправь ещё раз.");
     return;
   }
 
