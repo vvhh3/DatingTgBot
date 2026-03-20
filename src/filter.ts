@@ -6,7 +6,7 @@ import type { FilterResult } from "./types.js";
 const MAX_TEXT_LENGTH = 900;
 const WORD_CHAR_CLASS = "\\p{L}\\p{N}_";
 const currentModuleDirectory = path.dirname(fileURLToPath(import.meta.url));
-const DEFAULT_BANNED_TERMS_FILE = path.resolve(currentModuleDirectory, "..", "assets", "banned-terms.txt");
+const DEFAULT_BANNED_TERMS_FILE = path.resolve(currentModuleDirectory, "..", "data", "banned-terms.txt");
 const BANNED_TERMS_FILE = process.env.BANNED_TERMS_FILE?.trim() || DEFAULT_BANNED_TERMS_FILE;
 const suspiciousLinks = /(https?:\/\/|t\.me\/|telegram\.me\/|wa\.me\/)/iu;
 const obfuscationSeparators = /[\s._,*+\-|\\/]+/gu;
