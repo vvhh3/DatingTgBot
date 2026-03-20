@@ -24,6 +24,42 @@ const startMessage = [
   "И обязательно напиши, чтобы он(а) откликнулся(ась), если узнает себя!",
   "Кто знает, может, ваша история начнётся прямо здесь😍🥰"
 ].join("\n");
+const welcomeMessage = [
+  "💫 Добро пожаловать!",
+  "",
+  "Ищешь того самого незнакомца? 🤔",
+  "Встретил(а) кого-то и не решился(ась) подойти? 🥲",
+  "Я помогу найти ⬇️⬇️",
+  "",
+  "Оставь здесь:",
+  "1️⃣ Где?",
+  "2️⃣ Когда?",
+  "3️⃣ Как выглядел человек?",
+  "",
+  "📸 Можно прикреплять фото или видео - так шансы найти человека намного выше!",
+  "",
+  "И обязательно напиши, чтобы он(а) откликнулся(ась), если узнает себя!",
+  "Кто знает, может, ваша история начнётся прямо здесь 😍🥰",
+  "",
+  "📩 Как опубликовать пост в канале:",
+  "Напишите мне в бота - укажите текст, прикрепите фото/видео и добавьте небольшой комментарий, если нужно.",
+  "Я отправлю ваш пост на модерацию, и после проверки он выйдет в канале.",
+  "",
+  "📜 ПРАВИЛА (обязательно к прочтению):",
+  "",
+  "🚫 СТРОГО ЗАПРЕЩЕНО (нарушение = блокировка):",
+  "",
+  "❌ Оскорбления и флейм - обсуждаем тему, а не личности",
+  "❌ Политика и провокации",
+  "❌ Спам и реклама без согласования с администрацией",
+  "❌ Флуд (бессмысленные сообщения, спам символами)",
+  "❌ NSFW (18+) - запрещён взрослый и шок-контент",
+  "❌ Скрины личных переписок без согласия",
+  "",
+  "⚠️ Нарушение правил ведёт к предупреждению или мгновенному бану без предупреждения.",
+  "",
+  "💬 Будь уважителен - и, возможно, именно здесь начнётся чья-то история ❤️"
+].join("\n");
 const lastSubmissionAt = new Map<number, number>();
 const pendingMediaDrafts = new Map<
   number,
@@ -296,7 +332,7 @@ bot.start(async (ctx) => {
   if (config.startAnimation) {
     try {
       await ctx.replyWithAnimation(config.startAnimation, {
-        caption: startMessage
+        caption: welcomeMessage
       });
       return;
     } catch (error) {
@@ -307,7 +343,7 @@ bot.start(async (ctx) => {
   if (config.startPhotoPath) {
     try {
       await ctx.replyWithPhoto(Input.fromLocalFile(config.startPhotoPath), {
-        caption: startMessage
+        caption: welcomeMessage
       });
       return;
     } catch (error) {
@@ -318,7 +354,7 @@ bot.start(async (ctx) => {
   if (config.startVideo) {
     try {
       await ctx.replyWithVideo(config.startVideo, {
-        caption: startMessage
+        caption: welcomeMessage
       });
       return;
     } catch (error) {
@@ -329,7 +365,7 @@ bot.start(async (ctx) => {
   if (config.startPhoto) {
     try {
       await ctx.replyWithPhoto(config.startPhoto, {
-        caption: startMessage
+        caption: welcomeMessage
       });
       return;
     } catch (error) {
@@ -337,7 +373,7 @@ bot.start(async (ctx) => {
     }
   }
 
-  await ctx.reply(startMessage);
+  await ctx.reply(welcomeMessage);
   return;
 
   await ctx.reply(
