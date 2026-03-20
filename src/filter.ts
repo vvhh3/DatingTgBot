@@ -6,8 +6,11 @@ import type { FilterResult } from "./types.js";
 const MAX_TEXT_LENGTH = 900;
 const WORD_CHAR_CLASS = "\\p{L}\\p{N}_";
 const currentModuleDirectory = path.dirname(fileURLToPath(import.meta.url));
-const DEFAULT_BANNED_TERMS_FILE = path.resolve(currentModuleDirectory, "..", "data", "banned-terms.txt");
-const BANNED_TERMS_FILE = process.env.BANNED_TERMS_FILE?.trim() || DEFAULT_BANNED_TERMS_FILE;
+const DEFAULT_BANNED_TERMS_FILES = [
+  path.resolve(currentModuleDirectory, "..", "data", "banned-terms.txt"),
+  path.resolve(currentModuleDirectory, "data", "banned-terms.txt")
+];
+const configuredBannedTermsFile = process.env.BANNED_TERMS_FILE?.trim();
 const suspiciousLinks = /(https?:\/\/|t\.me\/|telegram\.me\/|wa\.me\/)/iu;
 const obfuscationSeparators = /[\s._,*+\-|\\/]+/gu;
 const obfuscatedRunPattern =
@@ -171,21 +174,28 @@ function isApproximateMatch(source: string, target: string): boolean {
 }
 
 function loadBannedTerms(): string[] {
-  let content: string;
+  const candidateFiles = configuredBannedTermsFile
+    ? [configuredBannedTermsFile, ...DEFAULT_BANNED_TERMS_FILES]
+    : DEFAULT_BANNED_TERMS_FILES;
+  let lastError: unknown;
 
-  try {
-    content = readFileSync(BANNED_TERMS_FILE, "utf8");
-  } catch (error) {
-    throw new Error(`Cannot read banned terms file: ${BANNED_TERMS_FILE}`, { cause: error });
+  for (const bannedTermsFile of candidateFiles) {
+    try {
+      const content = readFileSync(bannedTermsFile, "utf8");
+
+      return content
+        .split(/\r?\n/)
+        .map((line) => line.replace(/#.*$/, "").trim())
+        .filter(Boolean)
+        .flatMap((line) => line.split(","))
+        .map((item) => normalizeText(item))
+        .filter(Boolean);
+    } catch (error) {
+      lastError = error;
+    }
   }
 
-  return content
-    .split(/\r?\n/)
-    .map((line) => line.replace(/#.*$/, "").trim())
-    .filter(Boolean)
-    .flatMap((line) => line.split(","))
-    .map((item) => normalizeText(item))
-    .filter(Boolean);
+  throw new Error(`Cannot read banned terms file: ${candidateFiles.join(", ")}`, { cause: lastError });
 }
 
 const bannedPatterns = loadBannedTerms().map((term) => {
