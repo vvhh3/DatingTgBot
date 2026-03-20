@@ -87,6 +87,7 @@ export const config = {
   databaseUrl: requireEnv("DATABASE_URL"),
   databaseSsl: parseBoolean(process.env.DATABASE_SSL, false),
   startPhoto: optionalEnv("START_PHOTO"),
+  startVideo: optionalEnv("START_VIDEO"),
   moderationChatId: parseChatId("MODERATION_CHAT_ID"),
   targetChatId: parseChatId("TARGET_CHAT_ID"),
   adminUserIds: parseAdminIds(process.env.ADMIN_USER_IDS),

@@ -293,11 +293,26 @@ async function updateModerationMessage(submission: SubmissionRecord): Promise<vo
 }
 
 bot.start(async (ctx) => {
+  if (config.startVideo) {
+    try {
+      await ctx.replyWithVideo(config.startVideo, {
+        caption: startMessage
+      });
+      return;
+    } catch (error) {
+      console.warn("Failed to send start video, falling back to other welcome message options.", error);
+    }
+  }
+
   if (config.startPhoto) {
-    await ctx.replyWithPhoto(config.startPhoto, {
-      caption: startMessage
-    });
-    return;
+    try {
+      await ctx.replyWithPhoto(config.startPhoto, {
+        caption: startMessage
+      });
+      return;
+    } catch (error) {
+      console.warn("Failed to send start photo, falling back to text-only welcome message.", error);
+    }
   }
 
   await ctx.reply(startMessage);
