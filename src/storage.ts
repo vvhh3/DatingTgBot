@@ -23,6 +23,16 @@ type SubmissionRow = {
   moderated_at: string | Date | null;
 };
 
+type SubmissionStatsRow = {
+  total: string;
+  pending: string;
+  approved: string;
+  rejected: string;
+  text_count: string;
+  photo_count: string;
+  video_count: string;
+};
+
 const pool = new Pool({
   connectionString: config.databaseUrl,
   ssl: config.databaseSsl ? { rejectUnauthorized: false } : undefined
@@ -263,4 +273,40 @@ export async function updateModerationStatus(
     status,
     ...extra
   });
+}
+
+export async function getSubmissionStats(): Promise<{
+  total: number;
+  pending: number;
+  approved: number;
+  rejected: number;
+  textCount: number;
+  photoCount: number;
+  videoCount: number;
+}> {
+  await ensureSchemaReady();
+
+  const result = await pool.query<SubmissionStatsRow>(`
+    SELECT
+      COUNT(*)::text AS total,
+      COUNT(*) FILTER (WHERE status = 'pending')::text AS pending,
+      COUNT(*) FILTER (WHERE status = 'approved')::text AS approved,
+      COUNT(*) FILTER (WHERE status = 'rejected')::text AS rejected,
+      COUNT(*) FILTER (WHERE content_type = 'text')::text AS text_count,
+      COUNT(*) FILTER (WHERE content_type = 'photo')::text AS photo_count,
+      COUNT(*) FILTER (WHERE content_type = 'video')::text AS video_count
+    FROM submissions
+  `);
+
+  const row = result.rows[0];
+
+  return {
+    total: Number(row?.total ?? "0"),
+    pending: Number(row?.pending ?? "0"),
+    approved: Number(row?.approved ?? "0"),
+    rejected: Number(row?.rejected ?? "0"),
+    textCount: Number(row?.text_count ?? "0"),
+    photoCount: Number(row?.photo_count ?? "0"),
+    videoCount: Number(row?.video_count ?? "0")
+  };
 }

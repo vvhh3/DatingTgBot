@@ -45,7 +45,7 @@ function parseAdminIds(raw: string | undefined): Set<number> {
 
 function parseTimeZone(raw: string | undefined): string {
   const value = raw?.trim();
-  return value || Intl.DateTimeFormat().resolvedOptions().timeZone || "Europe/Moscow";
+  return value || "Europe/Astrakhan";
 }
 
 function parseCooldownSeconds(raw: string | undefined): number {

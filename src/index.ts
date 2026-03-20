@@ -5,6 +5,7 @@ import { moderateText } from "./filter.js";
 import {
   createSubmission,
   getSubmission,
+  getSubmissionStats,
   updateModerationStatus,
   updateSubmission
 } from "./storage.js";
@@ -21,6 +22,8 @@ const welcomeCaption = [
   "Я помогу найти ⬇️⬇️"
 ].join("\n");
 const welcomeDetails = [
+  "━━━━━━━━━━━━━━━",
+  "",
   "Оставь здесь:",
   "1️⃣ Где?",
   "2️⃣ Когда?",
@@ -28,12 +31,16 @@ const welcomeDetails = [
   "",
   "📸 Можно прикреплять фото или видео — так шансы найти человека значительно выше!",
   "",
-  "Кто знает, может, ваша история начнётся прямо здесь 😍🥰",
-  "----------------------------------------------------------",
-  "📩 Как опубликовать пост в канале:",
+  "||Кто знает, может, ваша история начнётся прямо здесь… 😍🥰||",
+  "",
+  "━━━━━━━━━━━━━━━",
+  "",
+  "📩 Как опубликовать пост:",
   "Напишите мне — укажите текст, при необходимости прикрепите фото/видео.",
   "Я отправлю ваш пост на модерацию, и после проверки он появится в канале.",
-  "----------------------------------------------------------",
+  "",
+  "━━━━━━━━━━━━━━━",
+  "",
   "📜 ПРАВИЛА (обязательно к прочтению):",
   "",
   "🚫 СТРОГО ЗАПРЕЩЕНО:",
@@ -42,10 +49,10 @@ const welcomeDetails = [
   "❌ Политика и провокации",
   "❌ Спам и реклама без согласования с администрацией",
   "❌ Флуд (бессмысленные сообщения, спам символами)",
-  "❌ Контент 18+ (запрещён взрослый и шок-контент)",
+  "❌ Контент 18+ (взрослый и шок-контент)",
   "❌ Публикации, связанные с продажей или покупкой товаров",
   "",
-  "⚠️ Нарушение правил ведёт к предупреждению или бану без предупреждения."
+  "⚠️ Нарушение правил ведёт к предупреждению или бану без предупреждения",
 ].join("\n");
 
 const lastSubmissionAt = new Map<number, number>();
@@ -98,6 +105,10 @@ function isAdmin(userId: number | undefined): boolean {
   }
 
   return config.adminUserIds.has(userId);
+}
+
+function isModerationChat(chatId: number): boolean {
+  return chatId === config.moderationChatId;
 }
 
 function getCooldownRemainingSeconds(userId: number): number {
@@ -193,7 +204,8 @@ function formatDateTime(value: string | undefined): string {
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
-    second: "2-digit"
+    second: "2-digit",
+    hourCycle: "h23"
   }).format(date);
 }
 
@@ -381,19 +393,31 @@ bot.command("cancel", async (ctx) => {
   await ctx.reply("Сохранённого черновика медиа сейчас нет.");
 });
 
-bot.command("chatid", async (ctx) => {
-  const chatTitle =
-    "title" in ctx.chat && typeof ctx.chat.title === "string"
-      ? ctx.chat.title
-      : "Личный чат";
-  const userId = ctx.from?.id ?? "недоступен";
+bot.command("stats", async (ctx) => {
+  if (!isAdmin(ctx.from?.id)) {
+    await ctx.reply("Недостаточно прав.");
+    return;
+  }
+
+  if (!isModerationChat(ctx.chat.id)) {
+    await ctx.reply("Эту команду можно использовать только в чате модерации.");
+    return;
+  }
+
+  const stats = await getSubmissionStats();
 
   await ctx.reply(
     [
-      `Chat ID: ${ctx.chat.id}`,
-      `Chat type: ${ctx.chat.type}`,
-      `Chat title: ${chatTitle}`,
-      `Your user ID: ${userId}`
+      "📊 Статистика заявок",
+      "",
+      `Всего: ${stats.total}`,
+      `На модерации: ${stats.pending}`,
+      `Одобрено: ${stats.approved}`,
+      `Отклонено: ${stats.rejected}`,
+      "",
+      `Текст: ${stats.textCount}`,
+      `Фото: ${stats.photoCount}`,
+      `Видео: ${stats.videoCount}`
     ].join("\n")
   );
 });
