@@ -86,6 +86,7 @@ export const config = {
   botToken: requireEnv("BOT_TOKEN"),
   databaseUrl: requireEnv("DATABASE_URL"),
   databaseSsl: parseBoolean(process.env.DATABASE_SSL, false),
+  startAnimation: optionalEnv("START_ANIMATION"),
   startPhoto: optionalEnv("START_PHOTO"),
   startVideo: optionalEnv("START_VIDEO"),
   moderationChatId: parseChatId("MODERATION_CHAT_ID"),

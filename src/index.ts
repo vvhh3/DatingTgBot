@@ -293,6 +293,17 @@ async function updateModerationMessage(submission: SubmissionRecord): Promise<vo
 }
 
 bot.start(async (ctx) => {
+  if (config.startAnimation) {
+    try {
+      await ctx.replyWithAnimation(config.startAnimation, {
+        caption: startMessage
+      });
+      return;
+    } catch (error) {
+      console.warn("Failed to send start animation, falling back to other welcome message options.", error);
+    }
+  }
+
   if (config.startVideo) {
     try {
       await ctx.replyWithVideo(config.startVideo, {
