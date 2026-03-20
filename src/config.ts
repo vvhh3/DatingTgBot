@@ -59,8 +59,28 @@ function parseCooldownSeconds(raw: string | undefined): number {
   return parsed;
 }
 
+function parseBoolean(raw: string | undefined, defaultValue = false): boolean {
+  const value = raw?.trim().toLowerCase();
+
+  if (!value) {
+    return defaultValue;
+  }
+
+  if (["1", "true", "yes", "on"].includes(value)) {
+    return true;
+  }
+
+  if (["0", "false", "no", "off"].includes(value)) {
+    return false;
+  }
+
+  throw new Error("Env var DATABASE_SSL must be a boolean-like value");
+}
+
 export const config = {
   botToken: requireEnv("BOT_TOKEN"),
+  databaseUrl: requireEnv("DATABASE_URL"),
+  databaseSsl: parseBoolean(process.env.DATABASE_SSL, false),
   moderationChatId: parseChatId("MODERATION_CHAT_ID"),
   targetChatId: parseChatId("TARGET_CHAT_ID"),
   adminUserIds: parseAdminIds(process.env.ADMIN_USER_IDS),

@@ -12,7 +12,7 @@
 - приём видео с подписью
 - модерация через inline-кнопки в Telegram
 - уведомление автора о публикации или отклонении
-- хранение заявок в SQLite
+- хранение заявок в PostgreSQL
 
 ## Быстрый старт
 
@@ -50,6 +50,8 @@ npm.cmd start
 ## Переменные окружения
 
 - `BOT_TOKEN` - токен Telegram-бота
+- `DATABASE_URL` - строка подключения к PostgreSQL
+- `DATABASE_SSL` - включает SSL для PostgreSQL; для внутреннего Railway-соединения обычно `false`
 - `MODERATION_CHAT_ID` - чат для заявок на модерацию
 - `TARGET_CHAT_ID` - чат или канал для публикации
 - `ADMIN_USER_IDS` - список Telegram user id через запятую; если оставить пустым, модерировать сможет любой участник чата модерации
@@ -72,9 +74,9 @@ npm.cmd start
 
 - `src/index.ts` - Telegram-бот и модерационные кнопки
 - `src/filter.ts` - фильтрация запрещённого контента
-- `src/storage.ts` - SQLite-хранилище заявок, включая фото и текст
+- `src/storage.ts` - PostgreSQL-хранилище заявок, включая фото и текст
 - `src/config.ts` - чтение `.env`
-- `data/submissions.db` - база SQLite с историей заявок
+- `docs/RAILWAY_POSTGRES.md` - деплой на Railway и работа с PostgreSQL
 - `docs/FUNCTIONALITY.md` - подробное описание функционала проекта
 
 ## Что можно улучшить дальше
