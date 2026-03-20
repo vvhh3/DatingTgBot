@@ -88,6 +88,7 @@ export const config = {
   databaseSsl: parseBoolean(process.env.DATABASE_SSL, false),
   startAnimation: optionalEnv("START_ANIMATION"),
   startPhoto: optionalEnv("START_PHOTO"),
+  startPhotoPath: optionalEnv("START_PHOTO_PATH"),
   startVideo: optionalEnv("START_VIDEO"),
   moderationChatId: parseChatId("MODERATION_CHAT_ID"),
   targetChatId: parseChatId("TARGET_CHAT_ID"),

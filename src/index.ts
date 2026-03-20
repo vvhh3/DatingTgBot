@@ -1,4 +1,4 @@
-import { Telegraf, Markup } from "telegraf";
+import { Telegraf, Markup, Input } from "telegraf";
 import type { Context } from "telegraf";
 import { config } from "./config.js";
 import { moderateText } from "./filter.js";
@@ -301,6 +301,17 @@ bot.start(async (ctx) => {
       return;
     } catch (error) {
       console.warn("Failed to send start animation, falling back to other welcome message options.", error);
+    }
+  }
+
+  if (config.startPhotoPath) {
+    try {
+      await ctx.replyWithPhoto(Input.fromLocalFile(config.startPhotoPath), {
+        caption: startMessage
+      });
+      return;
+    } catch (error) {
+      console.warn("Failed to send start photo from local file, falling back to other welcome message options.", error);
     }
   }
 
