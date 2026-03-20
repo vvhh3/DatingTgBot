@@ -40,6 +40,43 @@ const welcomeMessage = [
   "",
   "И обязательно напиши, чтобы он(а) откликнулся(ась), если узнает себя!",
   "Кто знает, может, ваша история начнётся прямо здесь 😍🥰",
+  "------------------------------------------",
+  "📩 Как опубликовать пост в канале:",
+  "Напишите мне - укажите текст, прикрепите фото/видео если нужно.",
+  "Я отправлю ваш пост на модерацию, и после проверки он выйдет в канале.",
+  "------------------------------------------",
+  "📜 ПРАВИЛА (обязательно к прочтению):",
+  "",
+  "🚫 СТРОГО ЗАПРЕЩЕНО (нарушение = блокировка):",
+  "",
+  "❌ Оскорбления и флейм - обсуждаем тему, а не личности",
+  "❌ Политика и провокации",
+  "❌ Спам и реклама без согласования с администрацией",
+  "❌ Флуд (бессмысленные сообщения, спам символами)",
+  "❌ NSFW (18+) - запрещён взрослый и шок-контент",
+  "❌ Скрины личных переписок без согласия",
+  "",
+  "⚠️ Нарушение правил ведёт к предупреждению или мгновенному бану без предупреждения.",
+  "",
+  "💬 Будь уважителен - и, возможно, именно здесь начнётся чья-то история ❤️"
+].join("\n");
+const welcomeCaption = [
+  "💫 Добро пожаловать!",
+  "",
+  "Ищешь того самого незнакомца? 🤔",
+  "Встретил(а) кого-то и не решился(ась) подойти? 🥲",
+  "Я помогу найти ⬇️⬇️"
+].join("\n");
+const welcomeDetails = [
+  "Оставь здесь:",
+  "1️⃣ Где?",
+  "2️⃣ Когда?",
+  "3️⃣ Как выглядел человек?",
+  "",
+  "📸 Можно прикреплять фото или видео - так шансы найти человека намного выше!",
+  "",
+  "И обязательно напиши, чтобы он(а) откликнулся(ась), если узнает себя!",
+  "Кто знает, может, ваша история начнётся прямо здесь 😍🥰",
   "",
   "📩 Как опубликовать пост в канале:",
   "Напишите мне в бота - укажите текст, прикрепите фото/видео и добавьте небольшой комментарий, если нужно.",
@@ -332,8 +369,9 @@ bot.start(async (ctx) => {
   if (config.startAnimation) {
     try {
       await ctx.replyWithAnimation(config.startAnimation, {
-        caption: welcomeMessage
+        caption: welcomeCaption
       });
+      await ctx.reply(welcomeDetails);
       return;
     } catch (error) {
       console.warn("Failed to send start animation, falling back to other welcome message options.", error);
@@ -343,8 +381,9 @@ bot.start(async (ctx) => {
   if (config.startPhotoPath) {
     try {
       await ctx.replyWithPhoto(Input.fromLocalFile(config.startPhotoPath), {
-        caption: welcomeMessage
+        caption: welcomeCaption
       });
+      await ctx.reply(welcomeDetails);
       return;
     } catch (error) {
       console.warn("Failed to send start photo from local file, falling back to other welcome message options.", error);
@@ -354,8 +393,9 @@ bot.start(async (ctx) => {
   if (config.startVideo) {
     try {
       await ctx.replyWithVideo(config.startVideo, {
-        caption: welcomeMessage
+        caption: welcomeCaption
       });
+      await ctx.reply(welcomeDetails);
       return;
     } catch (error) {
       console.warn("Failed to send start video, falling back to other welcome message options.", error);
@@ -365,15 +405,16 @@ bot.start(async (ctx) => {
   if (config.startPhoto) {
     try {
       await ctx.replyWithPhoto(config.startPhoto, {
-        caption: welcomeMessage
+        caption: welcomeCaption
       });
+      await ctx.reply(welcomeDetails);
       return;
     } catch (error) {
       console.warn("Failed to send start photo, falling back to text-only welcome message.", error);
     }
   }
 
-  await ctx.reply(welcomeMessage);
+  await ctx.reply([welcomeCaption, welcomeDetails].join("\n\n"));
   return;
 
   await ctx.reply(
