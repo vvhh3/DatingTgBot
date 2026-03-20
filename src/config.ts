@@ -12,6 +12,11 @@ function requireEnv(name: string): string {
   return value;
 }
 
+function optionalEnv(name: string): string | undefined {
+  const value = process.env[name]?.trim();
+  return value || undefined;
+}
+
 function parseChatId(name: string): number {
   const raw = requireEnv(name);
   const parsed = Number(raw);
@@ -81,6 +86,7 @@ export const config = {
   botToken: requireEnv("BOT_TOKEN"),
   databaseUrl: requireEnv("DATABASE_URL"),
   databaseSsl: parseBoolean(process.env.DATABASE_SSL, false),
+  startPhoto: optionalEnv("START_PHOTO"),
   moderationChatId: parseChatId("MODERATION_CHAT_ID"),
   targetChatId: parseChatId("TARGET_CHAT_ID"),
   adminUserIds: parseAdminIds(process.env.ADMIN_USER_IDS),

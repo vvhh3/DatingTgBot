@@ -12,6 +12,18 @@ import type { SubmissionRecord } from "./types.js";
 
 const bot = new Telegraf(config.botToken);
 const submissionCooldownMs = config.submissionCooldownSeconds * 1000;
+const startMessage = [
+  "Ищешь того самого незнакомца?🤔",
+  "Встретил(а) кого-то в Новокуйбышевске и не решился(ась) подойти?🥲",
+  "Я помогу найти⬇️⬇️",
+  "Оставь здесь:",
+  "1️⃣ Где?",
+  "2️⃣ Когда?",
+  "3️⃣ Как выглядел человек?",
+  "",
+  "И обязательно напиши, чтобы он(а) откликнулся(ась), если узнает себя!",
+  "Кто знает, может, ваша история начнётся прямо здесь😍🥰"
+].join("\n");
 const lastSubmissionAt = new Map<number, number>();
 const pendingMediaDrafts = new Map<
   number,
@@ -281,6 +293,16 @@ async function updateModerationMessage(submission: SubmissionRecord): Promise<vo
 }
 
 bot.start(async (ctx) => {
+  if (config.startPhoto) {
+    await ctx.replyWithPhoto(config.startPhoto, {
+      caption: startMessage
+    });
+    return;
+  }
+
+  await ctx.reply(startMessage);
+  return;
+
   await ctx.reply(
     [
       "Присылай сообщение сюда, и я отправлю его анонимно в предложку после проверки.",
