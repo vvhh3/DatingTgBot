@@ -75,19 +75,19 @@ const pendingRejectionNotes = new Map<
 
 type ExtractedSubmissionContent =
   | {
-      contentType: "text";
-      text: string;
-    }
+    contentType: "text";
+    text: string;
+  }
   | {
-      contentType: "photo";
-      text: string;
-      photoFileId: string;
-    }
+    contentType: "photo";
+    text: string;
+    photoFileId: string;
+  }
   | {
-      contentType: "video";
-      text: string;
-      videoFileId: string;
-    };
+    contentType: "video";
+    text: string;
+    videoFileId: string;
+  };
 
 function isTelegramErrorWithDescription(error: unknown, descriptionPart: string): boolean {
   if (!error || typeof error !== "object") {
@@ -441,9 +441,11 @@ bot.on("message", async (ctx) => {
   ) {
     const pendingRejection = pendingRejectionNotes.get(ctx.from.id);
 
-    const isModeratorComment = Boolean(pendingRejection);
-
-    if (isModeratorComment && pendingRejection) {
+    if (
+      pendingRejection &&
+      ctx.message.reply_to_message &&
+      ctx.message.reply_to_message.message_id === pendingRejection.promptMessageId
+    ) {
       if (!isAdmin(ctx.from?.id)) {
         pendingRejectionNotes.delete(ctx.from.id);
         await ctx.reply("Недостаточно прав.");
@@ -484,8 +486,9 @@ bot.on("message", async (ctx) => {
       if (updatedSubmission) {
         await updateModerationMessage(updatedSubmission);
       }
-
+      console.log("489 USER ID:", submission.userId);
       try {
+        console.log("491 USER ID:", submission.userId);
         await ctx.telegram.sendMessage(
           submission.userId,
           [
@@ -495,6 +498,7 @@ bot.on("message", async (ctx) => {
           ].join("\n")
         );
       } catch (error) {
+        console.log("501 USER ID:", submission.userId);
         console.warn("Не удалось отправить комментарий модератора пользователю:", error);
       }
 
@@ -541,15 +545,15 @@ bot.on("message", async (ctx) => {
     content.contentType === "text" && pendingMediaDraft
       ? pendingMediaDraft.contentType === "photo"
         ? {
-            contentType: "photo" as const,
-            text: content.text,
-            photoFileId: pendingMediaDraft.photoFileId as string
-          }
+          contentType: "photo" as const,
+          text: content.text,
+          photoFileId: pendingMediaDraft.photoFileId as string
+        }
         : {
-            contentType: "video" as const,
-            text: content.text,
-            videoFileId: pendingMediaDraft.videoFileId as string
-          }
+          contentType: "video" as const,
+          text: content.text,
+          videoFileId: pendingMediaDraft.videoFileId as string
+        }
       : content;
 
   const result = moderateText(submissionContent.text);
