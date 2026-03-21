@@ -488,14 +488,18 @@ bot.on("message", async (ctx) => {
         await updateModerationMessage(updatedSubmission);
       }
 
-      await ctx.telegram.sendMessage(
-        submission.userId,
-        [
-          "Твоё анонимное сообщение не прошло модерацию.",
-          "",
-          `Комментарий модератора: ${moderatorComment}`
-        ].join("\n")
-      );
+      try {
+        await ctx.telegram.sendMessage(
+          submission.userId,
+          [
+            "Твоё анонимное сообщение не прошло модерацию.",
+            "",
+            `Комментарий модератора: ${moderatorComment}`
+          ].join("\n")
+        );
+      } catch (error) {
+        console.warn("Не удалось отправить комментарий модератора пользователю:", error);
+      }
 
       await ctx.reply("Заявка отклонена, комментарий отправлен автору.");
       return;
@@ -640,10 +644,14 @@ bot.action(/^approve:(.+)$/, async (ctx) => {
     await updateModerationMessage(updatedSubmission);
   }
 
-  await ctx.telegram.sendMessage(
-    submission.userId,
-    "Твоё анонимное сообщение прошло модерацию и было опубликовано."
-  );
+  try {
+    await ctx.telegram.sendMessage(
+      submission.userId,
+      "Твоё анонимное сообщение прошло модерацию и было опубликовано."
+    );
+  } catch (error) {
+    console.warn("Не удалось отправить авто-уведомление пользователю после одобрения:", error);
+  }
 });
 
 bot.action(/^reject:(.+)$/, async (ctx) => {
@@ -681,10 +689,14 @@ bot.action(/^reject:(.+)$/, async (ctx) => {
     await updateModerationMessage(updatedSubmission);
   }
 
-  await ctx.telegram.sendMessage(
-    submission.userId,
-    "Твоё анонимное сообщение не прошло финальную модерацию."
-  );
+  try {
+    await ctx.telegram.sendMessage(
+      submission.userId,
+      "Твоё анонимное сообщение не прошло финальную модерацию."
+    );
+  } catch (error) {
+    console.warn("Не удалось отправить авто-уведомление пользователю после отклонения:", error);
+  }
 });
 
 bot.action(/^reject_note:(.+)$/, async (ctx) => {
