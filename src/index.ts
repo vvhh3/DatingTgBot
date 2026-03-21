@@ -16,7 +16,7 @@ const submissionCooldownMs = config.submissionCooldownSeconds * 1000;
 
 bot.command("test_error", async (ctx) => {
   if (isAdmin(ctx.from?.id)) {
-    throw new Error("💥 Это тестовая ошибка для проверки отправки в чат модеров");
+    throw new Error("💥Откат откат админы лучшие suck my ass");
   } else {
     await ctx.reply("Команда доступна только админам");
   }
@@ -47,11 +47,11 @@ bot.catch(async (err, ctx) => {
   }
 
   const humanInfoLines = [
-    "❌ *ОШИБКА БОТА*",
+    "❌ *опа -W67 вайб ошибка подъехала*",
     "",
     `Тип апдейта: ${updateType ?? "неизвестно"}`,
     `Чат: ${chatId ?? "?"} (${chatType ?? "?"})`,
-    `Пользователь: ${fromId ?? "?"} (${username ? "@" + username : firstName ?? "неизвестно"})`,
+    `Отправитель: ${fromId} ${formatPerson(username, firstName)}`,
     payload ? `Данные: ${payload}` : "",
     "",
     `Сообщение: ${error.message}`,
@@ -168,10 +168,12 @@ function isTelegramErrorWithDescription(error: unknown, descriptionPart: string)
 function isMessageNotModifiedError(error: unknown): boolean {
   return isTelegramErrorWithDescription(error, "message is not modified");
 }
-bot.use((ctx, next) => {
-  console.log("UPDATE RECEIVED:", JSON.stringify(ctx.update, null, 2));
-  return next();
-});
+
+//все логи
+// bot.use((ctx, next) => {
+//   console.log("UPDATE RECEIVED:", JSON.stringify(ctx.update, null, 2));
+//   return next();
+// });
 
 console.log("BOT STARTED");
 function isAdmin(userId: number | undefined): boolean {
