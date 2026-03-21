@@ -442,8 +442,11 @@ bot.on("message", async (ctx) => {
     const pendingRejection = pendingRejectionNotes.get(ctx.from.id);
     const repliedMessageId =
       "reply_to_message" in ctx.message ? ctx.message.reply_to_message?.message_id : undefined;
+    const isModeratorComment =
+      Boolean(pendingRejection) &&
+      (!repliedMessageId || repliedMessageId === pendingRejection?.promptMessageId);
 
-    if (pendingRejection && repliedMessageId === pendingRejection.promptMessageId) {
+    if (isModeratorComment && pendingRejection) {
       if (!isAdmin(ctx.from?.id)) {
         pendingRejectionNotes.delete(ctx.from.id);
         await ctx.reply("Недостаточно прав.");
