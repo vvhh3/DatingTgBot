@@ -14,6 +14,73 @@ import type { SubmissionRecord } from "./types.js";
 const bot = new Telegraf(config.botToken);
 const submissionCooldownMs = config.submissionCooldownSeconds * 1000;
 
+bot.command("test_error", async (ctx) => {
+  if (isAdmin(ctx.from?.id)) {
+    throw new Error("💥 Это тестовая ошибка для проверки отправки в чат модеров");
+  } else {
+    await ctx.reply("Команда доступна только админам");
+  }
+});
+
+bot.catch(async (err, ctx) => {
+  console.error("Bot error:", err);
+
+  const error = err instanceof Error ? err : new Error(String(err));
+  const stack = error.stack || error.message || String(error);
+
+  // собираем контекст
+  const updateType = ctx?.updateType;
+  const chatId = ctx?.chat?.id;
+  const chatType = ctx?.chat?.type;
+  const fromId = ctx?.from?.id;
+  const username = ctx?.from?.username;
+  const firstName = ctx?.from?.first_name;
+
+  let payload = "";
+  if ("message" in (ctx?.update ?? {})) {
+    const msg: any = (ctx as any).message;
+    if (msg.text) payload = msg.text;
+    else if (msg.caption) payload = msg.caption;
+  } else if ("callback_query" in (ctx?.update ?? {})) {
+    const cq: any = (ctx as any).update.callback_query;
+    payload = cq.data || "";
+  }
+
+  const humanInfoLines = [
+    "❌ *ОШИБКА БОТА*",
+    "",
+    `Тип апдейта: ${updateType ?? "неизвестно"}`,
+    `Чат: ${chatId ?? "?"} (${chatType ?? "?"})`,
+    `Пользователь: ${fromId ?? "?"} (${username ? "@" + username : firstName ?? "неизвестно"})`,
+    payload ? `Данные: ${payload}` : "",
+    "",
+    `Сообщение: ${error.message}`,
+    "",
+    "Stack:"
+  ].filter(Boolean);
+
+  const text = humanInfoLines.join("\n") + `\n\`\`\`\n${stack}\n\`\`\``;
+
+  // отправляем модераторам
+  try {
+    await bot.telegram.sendMessage(
+      config.moderationChatId,
+      text,
+      { parse_mode: "Markdown" }
+    );
+  } catch (sendErr) {
+    console.error("Failed to send error to moderation chat:", sendErr);
+  }
+
+  // отвечаем пользователю
+  if (ctx) {
+    try {
+      await ctx.reply("Произошла ошибка при обработке сообщения. Попробуй ещё раз.");
+    } catch {}
+  }
+});
+
+
 const welcomeCaption = [
   "💫 Добро пожаловать!",
   "",
@@ -65,22 +132,29 @@ const pendingMediaDrafts = new Map<
     createdAt: number;
   }
 >();
+const pendingRejectionNotes = new Map<
+  number,
+  {
+    submissionId: string;
+    promptMessageId: number;
+  }
+>();
 
 type ExtractedSubmissionContent =
   | {
-      contentType: "text";
-      text: string;
-    }
+    contentType: "text";
+    text: string;
+  }
   | {
-      contentType: "photo";
-      text: string;
-      photoFileId: string;
-    }
+    contentType: "photo";
+    text: string;
+    photoFileId: string;
+  }
   | {
-      contentType: "video";
-      text: string;
-      videoFileId: string;
-    };
+    contentType: "video";
+    text: string;
+    videoFileId: string;
+  };
 
 function isTelegramErrorWithDescription(error: unknown, descriptionPart: string): boolean {
   if (!error || typeof error !== "object") {
@@ -94,7 +168,12 @@ function isTelegramErrorWithDescription(error: unknown, descriptionPart: string)
 function isMessageNotModifiedError(error: unknown): boolean {
   return isTelegramErrorWithDescription(error, "message is not modified");
 }
+bot.use((ctx, next) => {
+  console.log("UPDATE RECEIVED:", JSON.stringify(ctx.update, null, 2));
+  return next();
+});
 
+console.log("BOT STARTED");
 function isAdmin(userId: number | undefined): boolean {
   if (!userId) {
     return false;
@@ -249,6 +328,9 @@ function moderationKeyboard(submissionId: string) {
     [
       Markup.button.callback("Опубликовать", `approve:${submissionId}`),
       Markup.button.callback("Отклонить", `reject:${submissionId}`)
+    ],
+    [
+      Markup.button.callback("Отклонить с комментарием", `reject_note:${submissionId}`)
     ]
   ]);
 }
@@ -423,6 +505,80 @@ bot.command("stats", async (ctx) => {
 });
 
 bot.on("message", async (ctx) => {
+  if (
+    ctx.chat.type !== "private" &&
+    isModerationChat(ctx.chat.id) &&
+    "text" in ctx.message &&
+    typeof ctx.message.text === "string"
+  ) {
+    const pendingRejection = pendingRejectionNotes.get(ctx.from.id);
+
+    if (
+      pendingRejection &&
+      ctx.message.reply_to_message &&
+      ctx.message.reply_to_message.message_id === pendingRejection.promptMessageId
+    ) {
+      if (!isAdmin(ctx.from?.id)) {
+        pendingRejectionNotes.delete(ctx.from.id);
+        await ctx.reply("Недостаточно прав.");
+        return;
+      }
+
+      const moderatorComment = ctx.message.text.trim();
+
+      if (!moderatorComment) {
+        await ctx.reply("Напиши комментарий текстом в ответ на сообщение бота.");
+        return;
+      }
+
+      const submission = await getSubmission(pendingRejection.submissionId);
+
+      if (!submission) {
+        pendingRejectionNotes.delete(ctx.from.id);
+        await ctx.reply("Заявка не найдена.");
+        return;
+      }
+
+      if (submission.status !== "pending") {
+        pendingRejectionNotes.delete(ctx.from.id);
+        await ctx.reply("Заявка уже обработана.");
+        return;
+      }
+
+      const updatedSubmission = await updateModerationStatus(submission.id, "rejected", {
+        rejectionReason: moderatorComment,
+        moderatedByUserId: ctx.from.id,
+        moderatedByUsername: ctx.from.username,
+        moderatedByFirstName: ctx.from.first_name,
+        moderatedAt: new Date().toISOString()
+      });
+
+      pendingRejectionNotes.delete(ctx.from.id);
+
+      if (updatedSubmission) {
+        await updateModerationMessage(updatedSubmission);
+      }
+      console.log("489 USER ID:", submission.userId);
+      try {
+        console.log("491 USER ID:", submission.userId);
+        await ctx.telegram.sendMessage(
+          submission.userId,
+          [
+            "Твоё анонимное сообщение не прошло модерацию.",
+            "",
+            `Комментарий модератора: ${moderatorComment}`
+          ].join("\n")
+        );
+      } catch (error) {
+        console.log("501 USER ID:", submission.userId);
+        console.warn("Не удалось отправить комментарий модератора пользователю:", error);
+      }
+
+      await ctx.reply("Заявка отклонена, комментарий отправлен автору.");
+      return;
+    }
+  }
+
   if (ctx.chat.type !== "private") {
     return;
   }
@@ -461,15 +617,15 @@ bot.on("message", async (ctx) => {
     content.contentType === "text" && pendingMediaDraft
       ? pendingMediaDraft.contentType === "photo"
         ? {
-            contentType: "photo" as const,
-            text: content.text,
-            photoFileId: pendingMediaDraft.photoFileId as string
-          }
+          contentType: "photo" as const,
+          text: content.text,
+          photoFileId: pendingMediaDraft.photoFileId as string
+        }
         : {
-            contentType: "video" as const,
-            text: content.text,
-            videoFileId: pendingMediaDraft.videoFileId as string
-          }
+          contentType: "video" as const,
+          text: content.text,
+          videoFileId: pendingMediaDraft.videoFileId as string
+        }
       : content;
 
   const result = moderateText(submissionContent.text);
@@ -561,10 +717,14 @@ bot.action(/^approve:(.+)$/, async (ctx) => {
     await updateModerationMessage(updatedSubmission);
   }
 
-  await ctx.telegram.sendMessage(
-    submission.userId,
-    "Твоё анонимное сообщение прошло модерацию и было опубликовано."
-  );
+  try {
+    await ctx.telegram.sendMessage(
+      submission.userId,
+      "Твоё анонимное сообщение прошло модерацию и было опубликовано."
+    );
+  } catch (error) {
+    console.warn("Не удалось отправить авто-уведомление пользователю после одобрения:", error);
+  }
 });
 
 bot.action(/^reject:(.+)$/, async (ctx) => {
@@ -602,20 +762,53 @@ bot.action(/^reject:(.+)$/, async (ctx) => {
     await updateModerationMessage(updatedSubmission);
   }
 
-  await ctx.telegram.sendMessage(
-    submission.userId,
-    "Твоё анонимное сообщение не прошло финальную модерацию."
-  );
+  try {
+    await ctx.telegram.sendMessage(
+      submission.userId,
+      "Твоё анонимное сообщение не прошло финальную модерацию."
+    );
+  } catch (error) {
+    console.warn("Не удалось отправить авто-уведомление пользователю после отклонения:", error);
+  }
 });
 
-bot.catch(async (error, ctx) => {
-  console.error("Bot error", error);
+bot.action(/^reject_note:(.+)$/, async (ctx) => {
+  const adminId = ctx.from?.id;
 
-  try {
-    await ctx.reply("Произошла ошибка при обработке сообщения. Попробуй ещё раз.");
-  } catch {
-    // ignore secondary errors
+  if (!isAdmin(adminId)) {
+    await ctx.answerCbQuery("Недостаточно прав", { show_alert: true });
+    return;
   }
+
+  const submissionId = ctx.match[1];
+  const submission = await getSubmission(submissionId);
+
+  if (!submission) {
+    await ctx.answerCbQuery("Заявка не найдена", { show_alert: true });
+    return;
+  }
+
+  if (submission.status !== "pending") {
+    await ctx.answerCbQuery("Заявка уже обработана");
+    return;
+  }
+
+  const prompt = await ctx.reply(
+    "Напиши комментарий для автора в ответ на это сообщение. После этого заявка будет отклонена.",
+    {
+      reply_markup: {
+        force_reply: true,
+        selective: true
+      }
+    }
+  );
+
+  pendingRejectionNotes.set(ctx.from.id, {
+    submissionId,
+    promptMessageId: prompt.message_id
+  });
+
+  await ctx.answerCbQuery("Жду комментарий модератора");
 });
 
 bot.launch();

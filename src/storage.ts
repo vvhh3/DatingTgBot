@@ -1,4 +1,7 @@
 import crypto from "node:crypto";
+import { mkdirSync } from "node:fs";
+import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { Pool } from "pg";
 import { config } from "./config.js";
 import type { ModerationStatus, SubmissionContentType, SubmissionRecord } from "./types.js";
@@ -23,65 +26,23 @@ type SubmissionRow = {
   moderated_at: string | Date | null;
 };
 
-type SubmissionStatsRow = {
-  total: string;
-  pending: string;
-  approved: string;
-  rejected: string;
-  text_count: string;
-  photo_count: string;
-  video_count: string;
+type SubmissionStats = {
+  total: number;
+  pending: number;
+  approved: number;
+  rejected: number;
+  textCount: number;
+  photoCount: number;
+  videoCount: number;
 };
 
-const pool = new Pool({
-  connectionString: config.databaseUrl,
-  ssl: config.databaseSsl ? { rejectUnauthorized: false } : undefined
-});
-
-let schemaReadyPromise: Promise<void> | undefined;
-
-function ensureSchemaReady(): Promise<void> {
-  if (!schemaReadyPromise) {
-    schemaReadyPromise = initializeSchema();
-  }
-
-  return schemaReadyPromise;
-}
-
-async function initializeSchema(): Promise<void> {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS submissions (
-      id TEXT PRIMARY KEY,
-      user_id BIGINT NOT NULL,
-      username TEXT,
-      first_name TEXT,
-      text TEXT NOT NULL,
-      content_type TEXT NOT NULL DEFAULT 'text',
-      photo_file_id TEXT,
-      video_file_id TEXT,
-      created_at TIMESTAMPTZ NOT NULL,
-      status TEXT NOT NULL,
-      moderation_message_id INTEGER,
-      published_message_id INTEGER,
-      rejection_reason TEXT,
-      moderated_by_user_id BIGINT,
-      moderated_by_username TEXT,
-      moderated_by_first_name TEXT,
-      moderated_at TIMESTAMPTZ
-    )
-  `);
-
-  await pool.query(`
-    ALTER TABLE submissions
-      ADD COLUMN IF NOT EXISTS content_type TEXT NOT NULL DEFAULT 'text',
-      ADD COLUMN IF NOT EXISTS photo_file_id TEXT,
-      ADD COLUMN IF NOT EXISTS video_file_id TEXT,
-      ADD COLUMN IF NOT EXISTS moderated_by_user_id BIGINT,
-      ADD COLUMN IF NOT EXISTS moderated_by_username TEXT,
-      ADD COLUMN IF NOT EXISTS moderated_by_first_name TEXT,
-      ADD COLUMN IF NOT EXISTS moderated_at TIMESTAMPTZ
-  `);
-}
+type StorageBackend = {
+  initialize(): Promise<void>;
+  createSubmission(payload: Omit<SubmissionRecord, "id" | "createdAt" | "status">): Promise<SubmissionRecord>;
+  getSubmission(id: string): Promise<SubmissionRecord | undefined>;
+  updateSubmission(id: string, updates: Partial<SubmissionRecord>): Promise<SubmissionRecord | undefined>;
+  getSubmissionStats(): Promise<SubmissionStats>;
+};
 
 function normalizeDate(value: string | Date | null | undefined): string | undefined {
   if (!value) {
@@ -125,97 +86,464 @@ function rowToSubmission(row: SubmissionRow | undefined): SubmissionRecord | und
   };
 }
 
-function submissionToParams(record: SubmissionRecord): Array<number | string | null> {
-  return [
-    String(record.userId),
-    record.username ?? null,
-    record.firstName ?? null,
-    record.text,
-    record.contentType,
-    record.photoFileId ?? null,
-    record.videoFileId ?? null,
-    record.createdAt,
-    record.status,
-    record.moderationMessageId ?? null,
-    record.publishedMessageId ?? null,
-    record.rejectionReason ?? null,
-    record.moderatedByUserId !== undefined ? String(record.moderatedByUserId) : null,
-    record.moderatedByUsername ?? null,
-    record.moderatedByFirstName ?? null,
-    record.moderatedAt ?? null
-  ];
+function buildNewSubmissionRecord(
+  payload: Omit<SubmissionRecord, "id" | "createdAt" | "status">
+): SubmissionRecord {
+  return {
+    ...payload,
+    id: crypto.randomUUID(),
+    createdAt: new Date().toISOString(),
+    status: "pending"
+  };
+}
+
+class PostgresStorage implements StorageBackend {
+  private readonly pool = new Pool({
+    connectionString: config.databaseUrl,
+    ssl: config.databaseSsl ? { rejectUnauthorized: false } : undefined
+  });
+
+  async initialize(): Promise<void> {
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS submissions (
+        id TEXT PRIMARY KEY,
+        user_id BIGINT NOT NULL,
+        username TEXT,
+        first_name TEXT,
+        text TEXT NOT NULL,
+        content_type TEXT NOT NULL DEFAULT 'text',
+        photo_file_id TEXT,
+        video_file_id TEXT,
+        created_at TIMESTAMPTZ NOT NULL,
+        status TEXT NOT NULL,
+        moderation_message_id INTEGER,
+        published_message_id INTEGER,
+        rejection_reason TEXT,
+        moderated_by_user_id BIGINT,
+        moderated_by_username TEXT,
+        moderated_by_first_name TEXT,
+        moderated_at TIMESTAMPTZ
+      )
+    `);
+
+    await this.pool.query(`
+      ALTER TABLE submissions
+        ADD COLUMN IF NOT EXISTS content_type TEXT NOT NULL DEFAULT 'text',
+        ADD COLUMN IF NOT EXISTS photo_file_id TEXT,
+        ADD COLUMN IF NOT EXISTS video_file_id TEXT,
+        ADD COLUMN IF NOT EXISTS moderated_by_user_id BIGINT,
+        ADD COLUMN IF NOT EXISTS moderated_by_username TEXT,
+        ADD COLUMN IF NOT EXISTS moderated_by_first_name TEXT,
+        ADD COLUMN IF NOT EXISTS moderated_at TIMESTAMPTZ
+    `);
+  }
+
+  async createSubmission(
+    payload: Omit<SubmissionRecord, "id" | "createdAt" | "status">
+  ): Promise<SubmissionRecord> {
+    const record = buildNewSubmissionRecord(payload);
+
+    await this.pool.query(
+      `
+        INSERT INTO submissions (
+          id,
+          user_id,
+          username,
+          first_name,
+          text,
+          content_type,
+          photo_file_id,
+          video_file_id,
+          created_at,
+          status,
+          moderation_message_id,
+          published_message_id,
+          rejection_reason,
+          moderated_by_user_id,
+          moderated_by_username,
+          moderated_by_first_name,
+          moderated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+      `,
+      [
+        record.id,
+        String(record.userId),
+        record.username ?? null,
+        record.firstName ?? null,
+        record.text,
+        record.contentType,
+        record.photoFileId ?? null,
+        record.videoFileId ?? null,
+        record.createdAt,
+        record.status,
+        record.moderationMessageId ?? null,
+        record.publishedMessageId ?? null,
+        record.rejectionReason ?? null,
+        record.moderatedByUserId !== undefined ? String(record.moderatedByUserId) : null,
+        record.moderatedByUsername ?? null,
+        record.moderatedByFirstName ?? null,
+        record.moderatedAt ?? null
+      ]
+    );
+
+    return record;
+  }
+
+  async getSubmission(id: string): Promise<SubmissionRecord | undefined> {
+    const result = await this.pool.query<SubmissionRow>(
+      `
+        SELECT
+          id,
+          user_id,
+          username,
+          first_name,
+          text,
+          content_type,
+          photo_file_id,
+          video_file_id,
+          created_at,
+          status,
+          moderation_message_id,
+          published_message_id,
+          rejection_reason,
+          moderated_by_user_id,
+          moderated_by_username,
+          moderated_by_first_name,
+          moderated_at
+        FROM submissions
+        WHERE id = $1
+      `,
+      [id]
+    );
+
+    return rowToSubmission(result.rows[0]);
+  }
+
+  async updateSubmission(id: string, updates: Partial<SubmissionRecord>): Promise<SubmissionRecord | undefined> {
+    const existingRecord = await this.getSubmission(id);
+
+    if (!existingRecord) {
+      return undefined;
+    }
+
+    const nextRecord: SubmissionRecord = {
+      ...existingRecord,
+      ...updates,
+      id: existingRecord.id
+    };
+
+    await this.pool.query(
+      `
+        UPDATE submissions
+        SET
+          user_id = $1,
+          username = $2,
+          first_name = $3,
+          text = $4,
+          content_type = $5,
+          photo_file_id = $6,
+          video_file_id = $7,
+          created_at = $8,
+          status = $9,
+          moderation_message_id = $10,
+          published_message_id = $11,
+          rejection_reason = $12,
+          moderated_by_user_id = $13,
+          moderated_by_username = $14,
+          moderated_by_first_name = $15,
+          moderated_at = $16
+        WHERE id = $17
+      `,
+      [
+        String(nextRecord.userId),
+        nextRecord.username ?? null,
+        nextRecord.firstName ?? null,
+        nextRecord.text,
+        nextRecord.contentType,
+        nextRecord.photoFileId ?? null,
+        nextRecord.videoFileId ?? null,
+        nextRecord.createdAt,
+        nextRecord.status,
+        nextRecord.moderationMessageId ?? null,
+        nextRecord.publishedMessageId ?? null,
+        nextRecord.rejectionReason ?? null,
+        nextRecord.moderatedByUserId !== undefined ? String(nextRecord.moderatedByUserId) : null,
+        nextRecord.moderatedByUsername ?? null,
+        nextRecord.moderatedByFirstName ?? null,
+        nextRecord.moderatedAt ?? null,
+        nextRecord.id
+      ]
+    );
+
+    return nextRecord;
+  }
+
+  async getSubmissionStats(): Promise<SubmissionStats> {
+    const result = await this.pool.query<{
+      total: string;
+      pending: string;
+      approved: string;
+      rejected: string;
+      text_count: string;
+      photo_count: string;
+      video_count: string;
+    }>(`
+      SELECT
+        COUNT(*)::text AS total,
+        COUNT(*) FILTER (WHERE status = 'pending')::text AS pending,
+        COUNT(*) FILTER (WHERE status = 'approved')::text AS approved,
+        COUNT(*) FILTER (WHERE status = 'rejected')::text AS rejected,
+        COUNT(*) FILTER (WHERE content_type = 'text')::text AS text_count,
+        COUNT(*) FILTER (WHERE content_type = 'photo')::text AS photo_count,
+        COUNT(*) FILTER (WHERE content_type = 'video')::text AS video_count
+      FROM submissions
+    `);
+
+    const row = result.rows[0];
+
+    return {
+      total: Number(row?.total ?? "0"),
+      pending: Number(row?.pending ?? "0"),
+      approved: Number(row?.approved ?? "0"),
+      rejected: Number(row?.rejected ?? "0"),
+      textCount: Number(row?.text_count ?? "0"),
+      photoCount: Number(row?.photo_count ?? "0"),
+      videoCount: Number(row?.video_count ?? "0")
+    };
+  }
+}
+
+class SqliteStorage implements StorageBackend {
+  private readonly db: DatabaseSync;
+
+  constructor(databasePath: string) {
+    const resolvedPath = path.resolve(databasePath);
+    mkdirSync(path.dirname(resolvedPath), { recursive: true });
+    this.db = new DatabaseSync(resolvedPath);
+  }
+
+  async initialize(): Promise<void> {
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS submissions (
+        id TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        username TEXT,
+        first_name TEXT,
+        text TEXT NOT NULL,
+        content_type TEXT NOT NULL DEFAULT 'text',
+        photo_file_id TEXT,
+        video_file_id TEXT,
+        created_at TEXT NOT NULL,
+        status TEXT NOT NULL,
+        moderation_message_id INTEGER,
+        published_message_id INTEGER,
+        rejection_reason TEXT,
+        moderated_by_user_id INTEGER,
+        moderated_by_username TEXT,
+        moderated_by_first_name TEXT,
+        moderated_at TEXT
+      )
+    `);
+  }
+
+  async createSubmission(
+    payload: Omit<SubmissionRecord, "id" | "createdAt" | "status">
+  ): Promise<SubmissionRecord> {
+    const record = buildNewSubmissionRecord(payload);
+
+    this.db
+      .prepare(`
+        INSERT INTO submissions (
+          id,
+          user_id,
+          username,
+          first_name,
+          text,
+          content_type,
+          photo_file_id,
+          video_file_id,
+          created_at,
+          status,
+          moderation_message_id,
+          published_message_id,
+          rejection_reason,
+          moderated_by_user_id,
+          moderated_by_username,
+          moderated_by_first_name,
+          moderated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `)
+      .run(
+        record.id,
+        record.userId,
+        record.username ?? null,
+        record.firstName ?? null,
+        record.text,
+        record.contentType,
+        record.photoFileId ?? null,
+        record.videoFileId ?? null,
+        record.createdAt,
+        record.status,
+        record.moderationMessageId ?? null,
+        record.publishedMessageId ?? null,
+        record.rejectionReason ?? null,
+        record.moderatedByUserId ?? null,
+        record.moderatedByUsername ?? null,
+        record.moderatedByFirstName ?? null,
+        record.moderatedAt ?? null
+      );
+
+    return record;
+  }
+
+  async getSubmission(id: string): Promise<SubmissionRecord | undefined> {
+    const row = this.db
+      .prepare(`
+        SELECT
+          id,
+          user_id,
+          username,
+          first_name,
+          text,
+          content_type,
+          photo_file_id,
+          video_file_id,
+          created_at,
+          status,
+          moderation_message_id,
+          published_message_id,
+          rejection_reason,
+          moderated_by_user_id,
+          moderated_by_username,
+          moderated_by_first_name,
+          moderated_at
+        FROM submissions
+        WHERE id = ?
+      `)
+      .get(id) as SubmissionRow | undefined;
+
+    return rowToSubmission(row);
+  }
+
+  async updateSubmission(id: string, updates: Partial<SubmissionRecord>): Promise<SubmissionRecord | undefined> {
+    const existingRecord = await this.getSubmission(id);
+
+    if (!existingRecord) {
+      return undefined;
+    }
+
+    const nextRecord: SubmissionRecord = {
+      ...existingRecord,
+      ...updates,
+      id: existingRecord.id
+    };
+
+    this.db
+      .prepare(`
+        UPDATE submissions
+        SET
+          user_id = ?,
+          username = ?,
+          first_name = ?,
+          text = ?,
+          content_type = ?,
+          photo_file_id = ?,
+          video_file_id = ?,
+          created_at = ?,
+          status = ?,
+          moderation_message_id = ?,
+          published_message_id = ?,
+          rejection_reason = ?,
+          moderated_by_user_id = ?,
+          moderated_by_username = ?,
+          moderated_by_first_name = ?,
+          moderated_at = ?
+        WHERE id = ?
+      `)
+      .run(
+        nextRecord.userId,
+        nextRecord.username ?? null,
+        nextRecord.firstName ?? null,
+        nextRecord.text,
+        nextRecord.contentType,
+        nextRecord.photoFileId ?? null,
+        nextRecord.videoFileId ?? null,
+        nextRecord.createdAt,
+        nextRecord.status,
+        nextRecord.moderationMessageId ?? null,
+        nextRecord.publishedMessageId ?? null,
+        nextRecord.rejectionReason ?? null,
+        nextRecord.moderatedByUserId ?? null,
+        nextRecord.moderatedByUsername ?? null,
+        nextRecord.moderatedByFirstName ?? null,
+        nextRecord.moderatedAt ?? null,
+        nextRecord.id
+      );
+
+    return nextRecord;
+  }
+
+  async getSubmissionStats(): Promise<SubmissionStats> {
+    const row = this.db
+      .prepare(`
+        SELECT
+          COUNT(*) AS total,
+          SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending,
+          SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) AS approved,
+          SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) AS rejected,
+          SUM(CASE WHEN content_type = 'text' THEN 1 ELSE 0 END) AS text_count,
+          SUM(CASE WHEN content_type = 'photo' THEN 1 ELSE 0 END) AS photo_count,
+          SUM(CASE WHEN content_type = 'video' THEN 1 ELSE 0 END) AS video_count
+        FROM submissions
+      `)
+      .get() as
+      | {
+          total: number | null;
+          pending: number | null;
+          approved: number | null;
+          rejected: number | null;
+          text_count: number | null;
+          photo_count: number | null;
+          video_count: number | null;
+        }
+      | undefined;
+
+    return {
+      total: Number(row?.total ?? 0),
+      pending: Number(row?.pending ?? 0),
+      approved: Number(row?.approved ?? 0),
+      rejected: Number(row?.rejected ?? 0),
+      textCount: Number(row?.text_count ?? 0),
+      photoCount: Number(row?.photo_count ?? 0),
+      videoCount: Number(row?.video_count ?? 0)
+    };
+  }
+}
+
+const backend: StorageBackend = config.databaseUrl
+  ? new PostgresStorage()
+  : new SqliteStorage(config.sqlitePath);
+
+let schemaReadyPromise: Promise<void> | undefined;
+
+function ensureSchemaReady(): Promise<void> {
+  if (!schemaReadyPromise) {
+    schemaReadyPromise = backend.initialize();
+  }
+
+  return schemaReadyPromise;
 }
 
 export async function createSubmission(
   payload: Omit<SubmissionRecord, "id" | "createdAt" | "status">
 ): Promise<SubmissionRecord> {
   await ensureSchemaReady();
-
-  const record: SubmissionRecord = {
-    ...payload,
-    id: crypto.randomUUID(),
-    createdAt: new Date().toISOString(),
-    status: "pending"
-  };
-
-  await pool.query(
-    `
-      INSERT INTO submissions (
-        id,
-        user_id,
-        username,
-        first_name,
-        text,
-        content_type,
-        photo_file_id,
-        video_file_id,
-        created_at,
-        status,
-        moderation_message_id,
-        published_message_id,
-        rejection_reason,
-        moderated_by_user_id,
-        moderated_by_username,
-        moderated_by_first_name,
-        moderated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
-    `,
-    [record.id, ...submissionToParams(record)]
-  );
-
-  return record;
+  return backend.createSubmission(payload);
 }
 
 export async function getSubmission(id: string): Promise<SubmissionRecord | undefined> {
   await ensureSchemaReady();
-
-  const result = await pool.query<SubmissionRow>(
-    `
-      SELECT
-        id,
-        user_id,
-        username,
-        first_name,
-        text,
-        content_type,
-        photo_file_id,
-        video_file_id,
-        created_at,
-        status,
-        moderation_message_id,
-        published_message_id,
-        rejection_reason,
-        moderated_by_user_id,
-        moderated_by_username,
-        moderated_by_first_name,
-        moderated_at
-      FROM submissions
-      WHERE id = $1
-    `,
-    [id]
-  );
-
-  return rowToSubmission(result.rows[0]);
+  return backend.getSubmission(id);
 }
 
 export async function updateSubmission(
@@ -223,45 +551,7 @@ export async function updateSubmission(
   updates: Partial<SubmissionRecord>
 ): Promise<SubmissionRecord | undefined> {
   await ensureSchemaReady();
-
-  const existingRecord = await getSubmission(id);
-
-  if (!existingRecord) {
-    return undefined;
-  }
-
-  const nextRecord: SubmissionRecord = {
-    ...existingRecord,
-    ...updates,
-    id: existingRecord.id
-  };
-
-  await pool.query(
-    `
-      UPDATE submissions
-      SET
-        user_id = $1,
-        username = $2,
-        first_name = $3,
-        text = $4,
-        content_type = $5,
-        photo_file_id = $6,
-        video_file_id = $7,
-        created_at = $8,
-        status = $9,
-        moderation_message_id = $10,
-        published_message_id = $11,
-        rejection_reason = $12,
-        moderated_by_user_id = $13,
-        moderated_by_username = $14,
-        moderated_by_first_name = $15,
-        moderated_at = $16
-      WHERE id = $17
-    `,
-    [...submissionToParams(nextRecord), nextRecord.id]
-  );
-
-  return nextRecord;
+  return backend.updateSubmission(id, updates);
 }
 
 export async function updateModerationStatus(
@@ -275,38 +565,7 @@ export async function updateModerationStatus(
   });
 }
 
-export async function getSubmissionStats(): Promise<{
-  total: number;
-  pending: number;
-  approved: number;
-  rejected: number;
-  textCount: number;
-  photoCount: number;
-  videoCount: number;
-}> {
+export async function getSubmissionStats(): Promise<SubmissionStats> {
   await ensureSchemaReady();
-
-  const result = await pool.query<SubmissionStatsRow>(`
-    SELECT
-      COUNT(*)::text AS total,
-      COUNT(*) FILTER (WHERE status = 'pending')::text AS pending,
-      COUNT(*) FILTER (WHERE status = 'approved')::text AS approved,
-      COUNT(*) FILTER (WHERE status = 'rejected')::text AS rejected,
-      COUNT(*) FILTER (WHERE content_type = 'text')::text AS text_count,
-      COUNT(*) FILTER (WHERE content_type = 'photo')::text AS photo_count,
-      COUNT(*) FILTER (WHERE content_type = 'video')::text AS video_count
-    FROM submissions
-  `);
-
-  const row = result.rows[0];
-
-  return {
-    total: Number(row?.total ?? "0"),
-    pending: Number(row?.pending ?? "0"),
-    approved: Number(row?.approved ?? "0"),
-    rejected: Number(row?.rejected ?? "0"),
-    textCount: Number(row?.text_count ?? "0"),
-    photoCount: Number(row?.photo_count ?? "0"),
-    videoCount: Number(row?.video_count ?? "0")
-  };
+  return backend.getSubmissionStats();
 }

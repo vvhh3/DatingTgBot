@@ -84,8 +84,9 @@ function parseBoolean(raw: string | undefined, defaultValue = false): boolean {
 
 export const config = {
   botToken: requireEnv("BOT_TOKEN"),
-  databaseUrl: requireEnv("DATABASE_URL"),
+  databaseUrl: optionalEnv("DATABASE_URL"),
   databaseSsl: parseBoolean(process.env.DATABASE_SSL, false),
+  sqlitePath: optionalEnv("SQLITE_PATH") || "data/submissions.db",
   startAnimation: optionalEnv("START_ANIMATION"),
   startPhoto: optionalEnv("START_PHOTO"),
   startPhotoPath: optionalEnv("START_PHOTO_PATH"),
