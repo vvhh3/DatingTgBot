@@ -14,6 +14,73 @@ import type { SubmissionRecord } from "./types.js";
 const bot = new Telegraf(config.botToken);
 const submissionCooldownMs = config.submissionCooldownSeconds * 1000;
 
+bot.command("test_error", async (ctx) => {
+  if (isAdmin(ctx.from?.id)) {
+    throw new Error("💥 Это тестовая ошибка для проверки отправки в чат модеров");
+  } else {
+    await ctx.reply("Команда доступна только админам");
+  }
+});
+
+bot.catch(async (err, ctx) => {
+  console.error("Bot error:", err);
+
+  const error = err instanceof Error ? err : new Error(String(err));
+  const stack = error.stack || error.message || String(error);
+
+  // собираем контекст
+  const updateType = ctx?.updateType;
+  const chatId = ctx?.chat?.id;
+  const chatType = ctx?.chat?.type;
+  const fromId = ctx?.from?.id;
+  const username = ctx?.from?.username;
+  const firstName = ctx?.from?.first_name;
+
+  let payload = "";
+  if ("message" in (ctx?.update ?? {})) {
+    const msg: any = (ctx as any).message;
+    if (msg.text) payload = msg.text;
+    else if (msg.caption) payload = msg.caption;
+  } else if ("callback_query" in (ctx?.update ?? {})) {
+    const cq: any = (ctx as any).update.callback_query;
+    payload = cq.data || "";
+  }
+
+  const humanInfoLines = [
+    "❌ *ОШИБКА БОТА*",
+    "",
+    `Тип апдейта: ${updateType ?? "неизвестно"}`,
+    `Чат: ${chatId ?? "?"} (${chatType ?? "?"})`,
+    `Пользователь: ${fromId ?? "?"} (${username ? "@" + username : firstName ?? "неизвестно"})`,
+    payload ? `Данные: ${payload}` : "",
+    "",
+    `Сообщение: ${error.message}`,
+    "",
+    "Stack:"
+  ].filter(Boolean);
+
+  const text = humanInfoLines.join("\n") + `\n\`\`\`\n${stack}\n\`\`\``;
+
+  // отправляем модераторам
+  try {
+    await bot.telegram.sendMessage(
+      config.moderationChatId,
+      text,
+      { parse_mode: "Markdown" }
+    );
+  } catch (sendErr) {
+    console.error("Failed to send error to moderation chat:", sendErr);
+  }
+
+  // отвечаем пользователю
+  if (ctx) {
+    try {
+      await ctx.reply("Произошла ошибка при обработке сообщения. Попробуй ещё раз.");
+    } catch {}
+  }
+});
+
+
 const welcomeCaption = [
   "💫 Добро пожаловать!",
   "",
@@ -742,16 +809,6 @@ bot.action(/^reject_note:(.+)$/, async (ctx) => {
   });
 
   await ctx.answerCbQuery("Жду комментарий модератора");
-});
-
-bot.catch(async (error, ctx) => {
-  console.error("Bot error", error);
-
-  try {
-    await ctx.reply("Произошла ошибка при обработке сообщения. Попробуй ещё раз.");
-  } catch {
-    // ignore secondary errors
-  }
 });
 
 bot.launch();
