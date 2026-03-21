@@ -101,7 +101,12 @@ function isTelegramErrorWithDescription(error: unknown, descriptionPart: string)
 function isMessageNotModifiedError(error: unknown): boolean {
   return isTelegramErrorWithDescription(error, "message is not modified");
 }
+bot.use((ctx, next) => {
+  console.log("UPDATE RECEIVED:", JSON.stringify(ctx.update, null, 2));
+  return next();
+});
 
+console.log("BOT STARTED");
 function isAdmin(userId: number | undefined): boolean {
   if (!userId) {
     return false;
