@@ -65,6 +65,13 @@ const pendingMediaDrafts = new Map<
     createdAt: number;
   }
 >();
+const pendingRejectionNotes = new Map<
+  number,
+  {
+    submissionId: string;
+    promptMessageId: number;
+  }
+>();
 
 type ExtractedSubmissionContent =
   | {
@@ -249,6 +256,9 @@ function moderationKeyboard(submissionId: string) {
     [
       Markup.button.callback("Опубликовать", `approve:${submissionId}`),
       Markup.button.callback("Отклонить", `reject:${submissionId}`)
+    ],
+    [
+      Markup.button.callback("Отклонить с комментарием", `reject_note:${submissionId}`)
     ]
   ]);
 }
@@ -423,6 +433,72 @@ bot.command("stats", async (ctx) => {
 });
 
 bot.on("message", async (ctx) => {
+  if (
+    ctx.chat.type !== "private" &&
+    isModerationChat(ctx.chat.id) &&
+    "text" in ctx.message &&
+    typeof ctx.message.text === "string"
+  ) {
+    const pendingRejection = pendingRejectionNotes.get(ctx.from.id);
+    const repliedMessageId =
+      "reply_to_message" in ctx.message ? ctx.message.reply_to_message?.message_id : undefined;
+
+    if (pendingRejection && repliedMessageId === pendingRejection.promptMessageId) {
+      if (!isAdmin(ctx.from?.id)) {
+        pendingRejectionNotes.delete(ctx.from.id);
+        await ctx.reply("Недостаточно прав.");
+        return;
+      }
+
+      const moderatorComment = ctx.message.text.trim();
+
+      if (!moderatorComment) {
+        await ctx.reply("Напиши комментарий текстом в ответ на сообщение бота.");
+        return;
+      }
+
+      const submission = await getSubmission(pendingRejection.submissionId);
+
+      if (!submission) {
+        pendingRejectionNotes.delete(ctx.from.id);
+        await ctx.reply("Заявка не найдена.");
+        return;
+      }
+
+      if (submission.status !== "pending") {
+        pendingRejectionNotes.delete(ctx.from.id);
+        await ctx.reply("Заявка уже обработана.");
+        return;
+      }
+
+      const updatedSubmission = await updateModerationStatus(submission.id, "rejected", {
+        rejectionReason: moderatorComment,
+        moderatedByUserId: ctx.from.id,
+        moderatedByUsername: ctx.from.username,
+        moderatedByFirstName: ctx.from.first_name,
+        moderatedAt: new Date().toISOString()
+      });
+
+      pendingRejectionNotes.delete(ctx.from.id);
+
+      if (updatedSubmission) {
+        await updateModerationMessage(updatedSubmission);
+      }
+
+      await ctx.telegram.sendMessage(
+        submission.userId,
+        [
+          "Твоё анонимное сообщение не прошло модерацию.",
+          "",
+          `Комментарий модератора: ${moderatorComment}`
+        ].join("\n")
+      );
+
+      await ctx.reply("Заявка отклонена, комментарий отправлен автору.");
+      return;
+    }
+  }
+
   if (ctx.chat.type !== "private") {
     return;
   }
@@ -606,6 +682,45 @@ bot.action(/^reject:(.+)$/, async (ctx) => {
     submission.userId,
     "Твоё анонимное сообщение не прошло финальную модерацию."
   );
+});
+
+bot.action(/^reject_note:(.+)$/, async (ctx) => {
+  const adminId = ctx.from?.id;
+
+  if (!isAdmin(adminId)) {
+    await ctx.answerCbQuery("Недостаточно прав", { show_alert: true });
+    return;
+  }
+
+  const submissionId = ctx.match[1];
+  const submission = await getSubmission(submissionId);
+
+  if (!submission) {
+    await ctx.answerCbQuery("Заявка не найдена", { show_alert: true });
+    return;
+  }
+
+  if (submission.status !== "pending") {
+    await ctx.answerCbQuery("Заявка уже обработана");
+    return;
+  }
+
+  const prompt = await ctx.reply(
+    "Напиши комментарий для автора в ответ на это сообщение. После этого заявка будет отклонена.",
+    {
+      reply_markup: {
+        force_reply: true,
+        selective: true
+      }
+    }
+  );
+
+  pendingRejectionNotes.set(ctx.from.id, {
+    submissionId,
+    promptMessageId: prompt.message_id
+  });
+
+  await ctx.answerCbQuery("Жду комментарий модератора");
 });
 
 bot.catch(async (error, ctx) => {
