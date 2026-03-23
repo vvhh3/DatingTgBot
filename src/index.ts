@@ -86,7 +86,7 @@ const welcomeCaption = [
   "",
   "Ищешь того самого незнакомца? 🤔",
   "Встретил(а) кого-то, но не решился(ась) подойти? 🥲",
-  "Я помогу найти ⬇️⬇️"
+  "Я помогу найти ⬇️⬇️⬇️"
 ].join("\n");
 const welcomeDetails = [
   "━━━━━━━━━━━━━━━",
@@ -242,16 +242,16 @@ function extractSubmissionContent(ctx: Context): ExtractedSubmissionContent | un
   return undefined;
 }
 
-function formatPerson(username: string | undefined, firstName: string | undefined): string {
+function formatPerson(username?: string, firstName?: string, id?: number): string {
   if (username) {
     return `@${username}`;
   }
 
-  if (firstName) {
-    return firstName;
+  if (id) {
+    return `[${firstName || "Пользователь"}](tg://user?id=${id})`;
   }
 
-  return "не указано";
+  return firstName || "Неизвестно";
 }
 
 function formatDecision(status: SubmissionRecord["status"]): string {
@@ -334,6 +334,167 @@ function moderationKeyboard(submissionId: string) {
     ]
   ]);
 }
+
+
+// команды на "/"
+
+
+bot.telegram.setMyCommands([
+  { command: "rules", description: "Правила анонимных сообщений" },
+  { command: "info", description: "Информация о боте" }
+]);
+
+bot.command("rules", async (ctx) => {
+  await ctx.reply("📜 ПРАВИЛА: \n  \n🚫 СТРОГО ЗАПРЕЩЕНО: \n \n❌ Оскорбления и флейм \n❌ Политика и провокации \n❌ Спам и реклама без согласования с администрацией \n❌ Флуд (бессмысленные сообщения, спам символами) \n❌ Контент 18+ (взрослый и шок-контент) \n❌ Публикации, связанные с продажей или покупкой товаров \n \n⚠️ Нарушение правил ведёт к предупреждению или бану без предупреждения");
+});
+
+bot.command("info", async (ctx) => {
+  await ctx.reply("Ищешь того самого незнакомца?🤔 \nВстретил(а) кого-то, но не решился(ась) подойти?🥲 \nЯ помогу найти ⬇️⬇️⬇️ \n\nОставь здесь: \n\n1️⃣ Где?\n\n2️⃣ Когда? \n\n3️⃣ Как выглядел человек? \n\n📸 Можно прикреплять фото или видео — так шансы найти человека значительно выше!");
+});
+
+
+
+
+// отклонить по причине
+
+const REJECT_REASONS = [
+  { key: "rules", label: "❌ Не прошёл правила" },
+  { key: "insults", label: "😮Оскорбления запрещены" },
+  { key: "spam", label: "🚫 Флуд / спам" },
+  { key: "nsfw", label: "🔞 Запрещённый контент" },
+  { key: "noReason", label: "☺ без причины" },
+  { key: "six", label: "☺ 67 +Реп W спайк дружелюбный бандит 52 ngg" },
+];
+
+function rejectReasonsKeyboard(submissionId: string) {
+  const buttons = REJECT_REASONS.map(r => [
+    Markup.button.callback(r.label, `reject_reason:${r.key}:${submissionId}`)
+  ]);
+
+  // кнопка назад
+  buttons.push([
+    Markup.button.callback("⬅️ Назад", `back:${submissionId}`)
+  ]);
+
+  return Markup.inlineKeyboard(buttons);
+}
+
+// --- Шаг 1: выбор причины отклонения ---
+bot.action(/^reject:(.+)$/, async (ctx) => {
+  const adminId = ctx.from?.id;
+  const submissionId = ctx.match[1];
+
+  if (!isAdmin(adminId)) {
+    await ctx.answerCbQuery("Недостаточно прав", { show_alert: true });
+    return;
+  }
+
+  const submission = await getSubmission(submissionId);
+  if (!submission) {
+    await ctx.answerCbQuery("Заявка не найдена", { show_alert: true });
+    return;
+  }
+
+  if (submission.status !== "pending") {
+    await ctx.answerCbQuery("Заявка уже обработана");
+    return;
+  }
+
+  // Показываем клавиатуру с причинами отклонения
+  await ctx.editMessageReplyMarkup(
+    rejectReasonsKeyboard(submissionId).reply_markup
+  );
+});
+
+// --- Шаг 2: отклонение по выбранной причине ---
+bot.action(/reject_reason:(.+):(.+)/, async (ctx) => {
+  const reasonKey = ctx.match[1];
+  const submissionId = ctx.match[2];
+  const submission = await getSubmission(submissionId);
+  if (!submission) return;
+
+  const reason = REJECT_REASONS.find(r => r.key === reasonKey);
+  const textReason = reason?.label || "Отклонено модератором";
+
+  const updatedSubmission = await updateModerationStatus(submissionId, "rejected", {
+    rejectionReason: textReason,
+    moderatedByUserId: ctx.from.id,
+    moderatedByUsername: ctx.from.username,
+    moderatedByFirstName: ctx.from.first_name,
+    moderatedAt: new Date().toISOString()
+  });
+
+  if (updatedSubmission) {
+    // Обновляем текст заявки модерации
+    await updateModerationMessage(updatedSubmission);
+  }
+
+  // Уведомляем пользователя
+  try {
+    await ctx.telegram.sendMessage(
+      submission.userId,
+      `Твоё анонимное сообщение отклонено.\nПричина: ${textReason}`
+    );
+  } catch (error) {
+    console.warn("Не удалось отправить уведомление пользователю после отклонения:", error);
+  }
+});
+
+// --- Шаг 3: кнопка "назад" ---
+bot.action(/back:(.+)/, async (ctx) => {
+  const submissionId = ctx.match[1];
+  await ctx.editMessageReplyMarkup(
+    moderationKeyboard(submissionId).reply_markup
+  );
+});
+
+// --- Шаг 4: мгновенное отклонение без выбора причины ---
+bot.action(/^reject_now:(.+)$/, async (ctx) => {
+  const adminId = ctx.from?.id;
+  const submissionId = ctx.match[1];
+
+  if (!isAdmin(adminId)) {
+    await ctx.answerCbQuery("Недостаточно прав", { show_alert: true });
+    return;
+  }
+
+  const submission = await getSubmission(submissionId);
+  if (!submission) {
+    await ctx.answerCbQuery("Заявка не найдена", { show_alert: true });
+    return;
+  }
+
+  if (submission.status !== "pending") {
+    await ctx.answerCbQuery("Заявка уже обработана");
+    return;
+  }
+
+  await ctx.answerCbQuery("Отклоняю...");
+
+  const updatedSubmission = await updateModerationStatus(submission.id, "rejected", {
+    rejectionReason: "Отклонено модератором",
+    moderatedByUserId: ctx.from.id,
+    moderatedByUsername: ctx.from.username,
+    moderatedByFirstName: ctx.from.first_name,
+    moderatedAt: new Date().toISOString()
+  });
+
+  if (updatedSubmission) {
+    await updateModerationMessage(updatedSubmission);
+  }
+
+  try {
+    await ctx.telegram.sendMessage(
+      submission.userId,
+      "Твоё анонимное сообщение не прошло финальную модерацию."
+    );
+  } catch (error) {
+    console.warn("Не удалось отправить авто-уведомление пользователю после отклонения:", error);
+  }
+});
+
+
+
 
 async function sendToModeration(ctx: Context, submission: SubmissionRecord) {
   const keyboard = moderationKeyboard(submission.id);
@@ -727,50 +888,51 @@ bot.action(/^approve:(.+)$/, async (ctx) => {
   }
 });
 
-bot.action(/^reject:(.+)$/, async (ctx) => {
-  const adminId = ctx.from?.id;
+// bot.action(/^reject:(.+)$/, async (ctx) => {
+//   const adminId = ctx.from?.id;
 
-  if (!isAdmin(adminId)) {
-    await ctx.answerCbQuery("Недостаточно прав", { show_alert: true });
-    return;
-  }
+//   if (!isAdmin(adminId)) {
+//     await ctx.answerCbQuery("Недостаточно прав", { show_alert: true });
+//     return;
+//   }
 
-  const submissionId = ctx.match[1];
-  const submission = await getSubmission(submissionId);
+//   const submissionId = ctx.match[1];
+//   const submission = await getSubmission(submissionId);
 
-  if (!submission) {
-    await ctx.answerCbQuery("Заявка не найдена", { show_alert: true });
-    return;
-  }
+//   if (!submission) {
+//     await ctx.answerCbQuery("Заявка не найдена", { show_alert: true });
+//     return;
+//   }
 
-  if (submission.status !== "pending") {
-    await ctx.answerCbQuery("Заявка уже обработана");
-    return;
-  }
+//   if (submission.status !== "pending") {
+//     await ctx.answerCbQuery("Заявка уже обработана");
+//     return;
+//   }
 
-  await ctx.answerCbQuery("Отклоняю...");
+//   await ctx.answerCbQuery("Отклоняю...");
 
-  const updatedSubmission = await updateModerationStatus(submission.id, "rejected", {
-    rejectionReason: "Отклонено модератором",
-    moderatedByUserId: ctx.from.id,
-    moderatedByUsername: ctx.from.username,
-    moderatedByFirstName: ctx.from.first_name,
-    moderatedAt: new Date().toISOString()
-  });
+//   const updatedSubmission = await updateModerationStatus(submission.id, "rejected", {
+//     rejectionReason: "Отклонено модератором",
+//     moderatedByUserId: ctx.from.id,
+//     moderatedByUsername: ctx.from.username,
+//     moderatedByFirstName: ctx.from.first_name,
+//     moderatedAt: new Date().toISOString()
+//   });
 
-  if (updatedSubmission) {
-    await updateModerationMessage(updatedSubmission);
-  }
+//   if (updatedSubmission) {
+//     await updateModerationMessage(updatedSubmission);
+//   }
 
-  try {
-    await ctx.telegram.sendMessage(
-      submission.userId,
-      "Твоё анонимное сообщение не прошло финальную модерацию."
-    );
-  } catch (error) {
-    console.warn("Не удалось отправить авто-уведомление пользователю после отклонения:", error);
-  }
-});
+//   try {
+//     await ctx.telegram.sendMessage(
+//       submission.userId,
+//       "Твоё анонимное сообщение не прошло финальную модерацию."
+//     );
+//   } catch (error) {
+//     console.warn("Не удалось отправить авто-уведомление пользователю после отклонения:", error);
+//   }
+// });
+
 
 bot.action(/^reject_note:(.+)$/, async (ctx) => {
   const adminId = ctx.from?.id;
