@@ -17,6 +17,7 @@ import { extractSubmissionContent, isAdmin, isModerationChat } from "../utils.js
 
 export function registerMessageHandlers(bot: Telegraf<Context>): void {
   bot.on("message", async (ctx) => {
+    // В moderation chat обрабатываем reply модератора на запрос причины отклонения.
     if (
       ctx.chat.type !== "private" &&
       isModerationChat(ctx.chat.id) &&
@@ -103,6 +104,7 @@ export function registerMessageHandlers(bot: Telegraf<Context>): void {
       return;
     }
 
+    // Медиа без подписи держим как черновик до следующего текстового сообщения.
     if ((content.contentType === "photo" || content.contentType === "video") && !content.text) {
       pendingMediaDrafts.set(ctx.from.id, {
         contentType: content.contentType,
@@ -141,6 +143,7 @@ export function registerMessageHandlers(bot: Telegraf<Context>): void {
             }
         : content;
 
+    // Локальная фильтрация отсекает слишком длинный или запрещённый контент до записи в storage.
     const result = moderateText(submissionContent.text);
 
     if (!result.allowed) {
@@ -165,6 +168,7 @@ export function registerMessageHandlers(bot: Telegraf<Context>): void {
 
     const moderationMessage = await sendToModeration(ctx, record);
 
+    // Запоминаем id сообщения в чате модерации, чтобы потом обновлять его после решения.
     await updateSubmission(record.id, {
       moderationMessageId: moderationMessage.message_id
     });

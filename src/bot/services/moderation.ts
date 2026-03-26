@@ -88,6 +88,7 @@ function buildModerationCaption(submission: SubmissionRecord): string {
 export async function sendToModeration(ctx: Context, submission: SubmissionRecord) {
   const keyboard = moderationKeyboard(submission.id);
 
+  // Сохраняем исходный формат заявки и добавляем moderation keyboard.
   if (submission.contentType === "photo" && submission.photoFileId) {
     return ctx.telegram.sendPhoto(config.moderationChatId, submission.photoFileId, {
       caption: buildModerationCaption(submission),
@@ -110,6 +111,7 @@ export async function sendToModeration(ctx: Context, submission: SubmissionRecor
 }
 
 export async function publishSubmission(ctx: Context, submission: SubmissionRecord) {
+  // В целевой чат публикуем заявку в том же формате, в каком её прислал пользователь.
   if (submission.contentType === "photo" && submission.photoFileId) {
     return ctx.telegram.sendPhoto(config.targetChatId, submission.photoFileId, {
       caption: submission.text || undefined
@@ -133,6 +135,7 @@ export async function updateModerationMessage(
     return;
   }
 
+  // После approve/reject обновляем текст moderation message и убираем кнопки.
   if (submission.contentType === "photo" || submission.contentType === "video") {
     await bot.telegram.editMessageCaption(
       config.moderationChatId,
