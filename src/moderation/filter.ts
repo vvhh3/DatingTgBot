@@ -1,14 +1,14 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { FilterResult } from "./types.js";
+import type { FilterResult } from "../shared/types.js";
 
 const MAX_TEXT_LENGTH = 900;
 const WORD_CHAR_CLASS = "\\p{L}\\p{N}_";
 const currentModuleDirectory = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_BANNED_TERMS_FILES = [
-  path.resolve(currentModuleDirectory, "..", "data", "banned-terms.txt"),
-  path.resolve(currentModuleDirectory, "data", "banned-terms.txt")
+  path.resolve(currentModuleDirectory, "..", "..", "data", "banned-terms.txt"),
+  path.resolve(currentModuleDirectory, "..", "data", "banned-terms.txt")
 ];
 const configuredBannedTermsFile = process.env.BANNED_TERMS_FILE?.trim();
 const suspiciousLinks = /(https?:\/\/|t\.me\/|telegram\.me\/|wa\.me\/)/iu;

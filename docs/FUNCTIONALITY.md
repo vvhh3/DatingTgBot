@@ -192,10 +192,11 @@ SQLite выбрана вместо JSON, потому что:
 
 ## Основные файлы проекта
 
-- `src/index.ts` — основной код Telegram-бота;
-- `src/filter.ts` — фильтрация текста;
-- `src/storage.ts` — работа с SQLite;
-- `src/types.ts` — общие типы;
+- `src/index.ts` — корневой вход в приложение;
+- `src/bot/index.ts` — основной код Telegram-бота;
+- `src/moderation/filter.ts` — фильтрация текста;
+- `src/storage/index.ts` — работа с SQLite/PostgreSQL;
+- `src/shared/types.ts` — общие типы;
 - `data/banned-terms.txt` — словарь запрещённых слов;
 - `data/submissions.db` — история заявок;
 - `README.md` — краткая инструкция по запуску.
