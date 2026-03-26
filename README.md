@@ -61,7 +61,7 @@ npm.cmd start
 
 ## Как работает фильтр
 
-Фильтр локальный и построен на правилах из [`src/filter.ts`](./src/filter.ts):
+Фильтр локальный и построен на правилах из [`src/moderation/filter.ts`](./src/moderation/filter.ts):
 
 - регулярные выражения для 18+ лексики
 - регулярные выражения для оскорблений
@@ -73,10 +73,12 @@ npm.cmd start
 
 ## Структура проекта
 
-- `src/index.ts` - Telegram-бот и модерационные кнопки
-- `src/filter.ts` - фильтрация запрещённого контента
-- `src/storage.ts` - хранилище заявок с автоматическим выбором PostgreSQL или SQLite
-- `src/config.ts` - чтение `.env`
+- `src/index.ts` - корневой вход в приложение
+- `src/bot/index.ts` - Telegram-бот и модерационные кнопки
+- `src/moderation/filter.ts` - фильтрация запрещённого контента
+- `src/storage/index.ts` - хранилище заявок с автоматическим выбором PostgreSQL или SQLite
+- `src/config/index.ts` - чтение `.env`
+- `src/shared/types.ts` - общие типы
 - `docs/RAILWAY_POSTGRES.md` - деплой на Railway и работа с PostgreSQL
 - `docs/FUNCTIONALITY.md` - подробное описание функционала проекта
 

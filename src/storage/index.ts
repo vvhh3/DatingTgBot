@@ -3,8 +3,8 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { Pool } from "pg";
-import { config } from "./config.js";
-import type { ModerationStatus, SubmissionContentType, SubmissionRecord } from "./types.js";
+import { config } from "../config/index.js";
+import type { ModerationStatus, SubmissionContentType, SubmissionRecord } from "../shared/types.js";
 
 type SubmissionRow = {
   id: string;
