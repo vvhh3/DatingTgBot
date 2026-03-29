@@ -5,6 +5,7 @@ import { moderationKeyboard } from "../keyboards.js";
 import { isMessageNotModifiedError } from "../utils.js";
 
 function formatPerson(username?: string, firstName?: string, id?: number): string {
+  // Для модератора полезнее всего username, а если его нет — кликабельная ссылка по id.
   if (username) {
     return `@${username}`;
   }
@@ -70,6 +71,7 @@ function formatContentType(submission: SubmissionRecord): string {
 }
 
 function buildModerationCaption(submission: SubmissionRecord): string {
+  // Единый формат карточки модерации для отправки и последующего обновления.
   return [
     "Новая анонимная заявка",
     "",
@@ -88,7 +90,7 @@ function buildModerationCaption(submission: SubmissionRecord): string {
 export async function sendToModeration(ctx: Context, submission: SubmissionRecord) {
   const keyboard = moderationKeyboard(submission.id);
 
-  // Сохраняем исходный формат заявки и добавляем moderation keyboard.
+  // Сохраняем исходный тип контента, чтобы модератор видел заявку в привычном виде.
   if (submission.contentType === "photo" && submission.photoFileId) {
     return ctx.telegram.sendPhoto(config.moderationChatId, submission.photoFileId, {
       caption: buildModerationCaption(submission),
@@ -111,7 +113,7 @@ export async function sendToModeration(ctx: Context, submission: SubmissionRecor
 }
 
 export async function publishSubmission(ctx: Context, submission: SubmissionRecord) {
-  // В целевой чат публикуем заявку в том же формате, в каком её прислал пользователь.
+  // В целевой чат переносим тот же формат, который прислал пользователь.
   if (submission.contentType === "photo" && submission.photoFileId) {
     return ctx.telegram.sendPhoto(config.targetChatId, submission.photoFileId, {
       caption: submission.text || undefined
@@ -135,7 +137,7 @@ export async function updateModerationMessage(
     return;
   }
 
-  // После approve/reject обновляем текст moderation message и убираем кнопки.
+  // У текстовых и медиа-сообщений в Telegram разные методы редактирования.
   if (submission.contentType === "photo" || submission.contentType === "video") {
     await bot.telegram.editMessageCaption(
       config.moderationChatId,
@@ -153,6 +155,7 @@ export async function updateModerationMessage(
   }
 
   try {
+    // После решения кнопки больше не нужны.
     await bot.telegram.editMessageReplyMarkup(
       config.moderationChatId,
       submission.moderationMessageId,
@@ -160,6 +163,7 @@ export async function updateModerationMessage(
       undefined
     );
   } catch (error) {
+    // Если разметка уже очищена, Telegram сообщает об этом как об ошибке, но для нас это штатная ситуация.
     if (!isMessageNotModifiedError(error)) {
       throw error;
     }

@@ -3,6 +3,8 @@ import { config } from "../config/index.js";
 import type { ExtractedSubmissionContent } from "./types.js";
 
 export function isTelegramErrorWithDescription(error: unknown, descriptionPart: string): boolean {
+  // У telegraf/telegram нет одного стабильного класса ошибок,
+  // поэтому делаем мягкую структурную проверку и используем её в точечных fallback-сценариях.
   if (!error || typeof error !== "object") {
     return false;
   }
@@ -21,6 +23,8 @@ export function isAdmin(userId: number | undefined): boolean {
   }
 
   if (config.adminUserIds.size === 0) {
+    // Пустой список админов интерпретируем как "режим без ограничений",
+    // что удобно на первом запуске и в локальной разработке.
     return true;
   }
 
@@ -37,6 +41,8 @@ export function extractSubmissionContent(ctx: Context): ExtractedSubmissionConte
   }
 
   if ("photo" in ctx.message && Array.isArray(ctx.message.photo) && ctx.message.photo.length > 0) {
+    // Telegram присылает несколько размеров одного фото.
+    // Берём последний file_id как наиболее качественный вариант.
     const largestPhoto = ctx.message.photo[ctx.message.photo.length - 1];
     const caption = typeof ctx.message.caption === "string" ? ctx.message.caption.trim() : "";
 
@@ -58,6 +64,7 @@ export function extractSubmissionContent(ctx: Context): ExtractedSubmissionConte
   }
 
   if ("text" in ctx.message && typeof ctx.message.text === "string") {
+    // Отдельный кейс для обычной текстовой заявки без медиа.
     return {
       contentType: "text",
       text: ctx.message.text

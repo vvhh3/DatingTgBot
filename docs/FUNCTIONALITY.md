@@ -199,7 +199,6 @@ SQLite выбрана вместо JSON, потому что:
 - `src/shared/types.ts` — общие типы;
 - `data/banned-terms.txt` — словарь запрещённых слов;
 - `data/submissions.db` — история заявок;
-- `README.md` — краткая инструкция по запуску.
 
 ## Команды проекта
 
