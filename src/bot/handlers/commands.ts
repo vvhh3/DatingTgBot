@@ -103,6 +103,7 @@ export function registerCommandHandlers(bot: Telegraf<Context>): void {
         `На модерации: ${stats.pending}`,
         `Одобрено: ${stats.approved}`,
         `Отклонено: ${stats.rejected}`,
+        `Отменено автором: ${stats.cancelled}`,
         "",
         `Текст: ${stats.textCount}`,
         `Фото: ${stats.photoCount}`,

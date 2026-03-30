@@ -33,3 +33,9 @@ export function rejectReasonsKeyboard(submissionId: string) {
 
   return Markup.inlineKeyboard(buttons);
 }
+
+export function userPendingSubmissionKeyboard(submissionId: string) {
+  return Markup.inlineKeyboard([
+    [Markup.button.callback("Отменить заявку", `cancel_submission:${submissionId}`)]
+  ]);
+}

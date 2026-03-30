@@ -12,6 +12,7 @@ import {
   pendingMediaDrafts,
   pendingRejectionNotes
 } from "../state.js";
+import { userPendingSubmissionKeyboard } from "../keyboards.js";
 import { sendToModeration, updateModerationMessage } from "../services/moderation.js";
 import { extractSubmissionContent, isAdmin, isModerationChat } from "../utils.js";
 
@@ -72,9 +73,7 @@ export function registerMessageHandlers(bot: Telegraf<Context>): void {
           await updateModerationMessage(bot, updatedSubmission);
         }
 
-        console.log("489 USER ID:", submission.userId);
         try {
-          console.log("491 USER ID:", submission.userId);
           await ctx.telegram.sendMessage(
             submission.userId,
             [
@@ -84,7 +83,6 @@ export function registerMessageHandlers(bot: Telegraf<Context>): void {
             ].join("\n")
           );
         } catch (error) {
-          console.log("501 USER ID:", submission.userId);
           console.warn("Не удалось отправить комментарий модератора пользователю:", error);
         }
 
@@ -176,6 +174,9 @@ export function registerMessageHandlers(bot: Telegraf<Context>): void {
     lastSubmissionAt.set(ctx.from.id, Date.now());
     pendingMediaDrafts.delete(ctx.from.id);
 
-    await ctx.reply("Сообщение принято и отправлено на модерацию анонимно.");
+    await ctx.reply(
+      "Сообщение принято и отправлено на модерацию анонимно. Пока модератор не принял решение, ты можешь отменить заявку кнопкой ниже.",
+      userPendingSubmissionKeyboard(record.id)
+    );
   });
 }

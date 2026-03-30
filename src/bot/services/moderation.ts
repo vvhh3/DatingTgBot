@@ -22,6 +22,8 @@ function formatDecision(status: SubmissionRecord["status"]): string {
       return "Одобрено";
     case "rejected":
       return "Отклонено";
+    case "cancelled":
+      return "Отменено автором";
     default:
       return "На модерации";
   }
@@ -70,6 +72,9 @@ function formatContentType(submission: SubmissionRecord): string {
 }
 
 function buildModerationCaption(submission: SubmissionRecord): string {
+  const reasonLabel =
+    submission.status === "cancelled" ? "Причина отмены" : "Причина отклонения";
+
   return [
     "Новая анонимная заявка",
     "",
@@ -79,7 +84,7 @@ function buildModerationCaption(submission: SubmissionRecord): string {
     `Статус: ${formatDecision(submission.status)}`,
     `Решение принял: ${formatModerator(submission)}`,
     submission.moderatedAt ? `Время решения: ${formatDateTime(submission.moderatedAt)}` : "",
-    submission.rejectionReason ? `Причина отклонения: ${submission.rejectionReason}` : "",
+    submission.rejectionReason ? `${reasonLabel}: ${submission.rejectionReason}` : "",
     "",
     `Текст сообщения: ${submission.text}`
   ].filter(Boolean).join("\n");

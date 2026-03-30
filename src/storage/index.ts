@@ -31,6 +31,7 @@ type SubmissionStats = {
   pending: number;
   approved: number;
   rejected: number;
+  cancelled: number;
   textCount: number;
   photoCount: number;
   videoCount: number;
@@ -284,6 +285,7 @@ class PostgresStorage implements StorageBackend {
       pending: string;
       approved: string;
       rejected: string;
+      cancelled: string;
       text_count: string;
       photo_count: string;
       video_count: string;
@@ -293,6 +295,7 @@ class PostgresStorage implements StorageBackend {
         COUNT(*) FILTER (WHERE status = 'pending')::text AS pending,
         COUNT(*) FILTER (WHERE status = 'approved')::text AS approved,
         COUNT(*) FILTER (WHERE status = 'rejected')::text AS rejected,
+        COUNT(*) FILTER (WHERE status = 'cancelled')::text AS cancelled,
         COUNT(*) FILTER (WHERE content_type = 'text')::text AS text_count,
         COUNT(*) FILTER (WHERE content_type = 'photo')::text AS photo_count,
         COUNT(*) FILTER (WHERE content_type = 'video')::text AS video_count
@@ -306,6 +309,7 @@ class PostgresStorage implements StorageBackend {
       pending: Number(row?.pending ?? "0"),
       approved: Number(row?.approved ?? "0"),
       rejected: Number(row?.rejected ?? "0"),
+      cancelled: Number(row?.cancelled ?? "0"),
       textCount: Number(row?.text_count ?? "0"),
       photoCount: Number(row?.photo_count ?? "0"),
       videoCount: Number(row?.video_count ?? "0")
@@ -491,17 +495,19 @@ class SqliteStorage implements StorageBackend {
           SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending,
           SUM(CASE WHEN status = 'approved' THEN 1 ELSE 0 END) AS approved,
           SUM(CASE WHEN status = 'rejected' THEN 1 ELSE 0 END) AS rejected,
+          SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled,
           SUM(CASE WHEN content_type = 'text' THEN 1 ELSE 0 END) AS text_count,
           SUM(CASE WHEN content_type = 'photo' THEN 1 ELSE 0 END) AS photo_count,
           SUM(CASE WHEN content_type = 'video' THEN 1 ELSE 0 END) AS video_count
         FROM submissions
       `)
       .get() as
-      | {
+        | {
           total: number | null;
           pending: number | null;
           approved: number | null;
           rejected: number | null;
+          cancelled: number | null;
           text_count: number | null;
           photo_count: number | null;
           video_count: number | null;
@@ -513,6 +519,7 @@ class SqliteStorage implements StorageBackend {
       pending: Number(row?.pending ?? 0),
       approved: Number(row?.approved ?? 0),
       rejected: Number(row?.rejected ?? 0),
+      cancelled: Number(row?.cancelled ?? 0),
       textCount: Number(row?.text_count ?? 0),
       photoCount: Number(row?.photo_count ?? 0),
       videoCount: Number(row?.video_count ?? 0)

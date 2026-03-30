@@ -6,6 +6,53 @@ import { publishSubmission, updateModerationMessage } from "../services/moderati
 import { isAdmin, isTelegramErrorWithDescription } from "../utils.js";
 
 export function registerModerationActionHandlers(bot: Telegraf<Context>): void {
+  bot.action(/^cancel_submission:(.+)$/, async (ctx) => {
+    const submissionId = ctx.match[1];
+    const submission = await getSubmission(submissionId);
+
+    if (!submission) {
+      await ctx.answerCbQuery("Заявка не найдена", { show_alert: true });
+
+      try {
+        await ctx.editMessageReplyMarkup(undefined);
+      } catch {}
+
+      return;
+    }
+
+    if (submission.userId !== ctx.from.id) {
+      await ctx.answerCbQuery("Отменить можно только свою заявку", { show_alert: true });
+      return;
+    }
+
+    if (submission.status !== "pending") {
+      await ctx.answerCbQuery("Заявка уже обработана");
+
+      try {
+        await ctx.editMessageReplyMarkup(undefined);
+      } catch {}
+
+      return;
+    }
+
+    const updatedSubmission = await updateModerationStatus(submission.id, "cancelled", {
+      rejectionReason: "Отменено автором до решения модератора",
+      moderatedByUserId: submission.userId,
+      moderatedByUsername: submission.username,
+      moderatedByFirstName: submission.firstName,
+      moderatedAt: new Date().toISOString()
+    });
+
+    if (updatedSubmission) {
+      await updateModerationMessage(bot, updatedSubmission);
+    }
+
+    await ctx.answerCbQuery("Заявка отменена");
+    await ctx.editMessageText(
+      "Заявка отменена. Модераторы больше не смогут её одобрить или отклонить."
+    );
+  });
+
   bot.action(/^reject:(.+)$/, async (ctx) => {
     const adminId = ctx.from?.id;
     const submissionId = ctx.match[1];
@@ -38,6 +85,11 @@ export function registerModerationActionHandlers(bot: Telegraf<Context>): void {
       return;
     }
 
+    if (submission.status !== "pending") {
+      await ctx.answerCbQuery("Заявка уже обработана");
+      return;
+    }
+
     const reason = REJECT_REASONS.find((item) => item.key === reasonKey);
     const textReason = reason?.label || "Отклонено модератором";
 
@@ -65,6 +117,13 @@ export function registerModerationActionHandlers(bot: Telegraf<Context>): void {
 
   bot.action(/back:(.+)/, async (ctx) => {
     const submissionId = ctx.match[1];
+
+    const submission = await getSubmission(submissionId);
+    if (!submission || submission.status !== "pending") {
+      await ctx.answerCbQuery("Заявка уже обработана");
+      return;
+    }
+
     await ctx.editMessageReplyMarkup(moderationKeyboard(submissionId).reply_markup);
   });
 
