@@ -13,7 +13,11 @@ import {
   pendingRejectionNotes
 } from "../state.js";
 import { userPendingSubmissionKeyboard } from "../keyboards.js";
-import { sendToModeration, updateModerationMessage } from "../services/moderation.js";
+import {
+  clearUserPendingMessage,
+  sendToModeration,
+  updateModerationMessage
+} from "../services/moderation.js";
 import { extractSubmissionContent, isAdmin, isModerationChat } from "../utils.js";
 
 export function registerMessageHandlers(bot: Telegraf<Context>): void {
@@ -71,6 +75,7 @@ export function registerMessageHandlers(bot: Telegraf<Context>): void {
 
         if (updatedSubmission) {
           await updateModerationMessage(bot, updatedSubmission);
+          await clearUserPendingMessage(bot, updatedSubmission);
         }
 
         try {
@@ -166,17 +171,18 @@ export function registerMessageHandlers(bot: Telegraf<Context>): void {
 
     const moderationMessage = await sendToModeration(ctx, record);
 
-    // Запоминаем id сообщения в чате модерации, чтобы потом обновлять его после решения.
+    const userPendingMessage = await ctx.reply(
+      "Сообщение принято и отправлено на модерацию анонимно. Пока модератор не принял решение, ты можешь отменить заявку кнопкой ниже.",
+      userPendingSubmissionKeyboard(record.id)
+    );
+
+    // Запоминаем id сообщений в чате модерации и в личке пользователя, чтобы потом обновлять их после решения.
     await updateSubmission(record.id, {
-      moderationMessageId: moderationMessage.message_id
+      moderationMessageId: moderationMessage.message_id,
+      userPendingMessageId: userPendingMessage.message_id
     });
 
     lastSubmissionAt.set(ctx.from.id, Date.now());
     pendingMediaDrafts.delete(ctx.from.id);
-
-    await ctx.reply(
-      "Сообщение принято и отправлено на модерацию анонимно. Пока модератор не принял решение, ты можешь отменить заявку кнопкой ниже.",
-      userPendingSubmissionKeyboard(record.id)
-    );
   });
 }

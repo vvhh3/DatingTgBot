@@ -14,6 +14,7 @@ export interface SubmissionRecord {
   status: ModerationStatus;
   moderationMessageId?: number;
   publishedMessageId?: number;
+  userPendingMessageId?: number;
   rejectionReason?: string;
   moderatedByUserId?: number;
   moderatedByUsername?: string;

@@ -19,6 +19,7 @@ type SubmissionRow = {
   status: ModerationStatus;
   moderation_message_id: number | null;
   published_message_id: number | null;
+  user_pending_message_id: number | null;
   rejection_reason: string | null;
   moderated_by_user_id: number | string | null;
   moderated_by_username: string | null;
@@ -79,6 +80,7 @@ function rowToSubmission(row: SubmissionRow | undefined): SubmissionRecord | und
     status: row.status,
     moderationMessageId: row.moderation_message_id ?? undefined,
     publishedMessageId: row.published_message_id ?? undefined,
+    userPendingMessageId: row.user_pending_message_id ?? undefined,
     rejectionReason: row.rejection_reason ?? undefined,
     moderatedByUserId: normalizeBigInt(row.moderated_by_user_id),
     moderatedByUsername: row.moderated_by_username ?? undefined,
@@ -119,6 +121,7 @@ class PostgresStorage implements StorageBackend {
         status TEXT NOT NULL,
         moderation_message_id INTEGER,
         published_message_id INTEGER,
+        user_pending_message_id INTEGER,
         rejection_reason TEXT,
         moderated_by_user_id BIGINT,
         moderated_by_username TEXT,
@@ -132,6 +135,7 @@ class PostgresStorage implements StorageBackend {
         ADD COLUMN IF NOT EXISTS content_type TEXT NOT NULL DEFAULT 'text',
         ADD COLUMN IF NOT EXISTS photo_file_id TEXT,
         ADD COLUMN IF NOT EXISTS video_file_id TEXT,
+        ADD COLUMN IF NOT EXISTS user_pending_message_id INTEGER,
         ADD COLUMN IF NOT EXISTS moderated_by_user_id BIGINT,
         ADD COLUMN IF NOT EXISTS moderated_by_username TEXT,
         ADD COLUMN IF NOT EXISTS moderated_by_first_name TEXT,
@@ -159,12 +163,13 @@ class PostgresStorage implements StorageBackend {
           status,
           moderation_message_id,
           published_message_id,
+          user_pending_message_id,
           rejection_reason,
           moderated_by_user_id,
           moderated_by_username,
           moderated_by_first_name,
           moderated_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
       `,
       [
         record.id,
@@ -179,6 +184,7 @@ class PostgresStorage implements StorageBackend {
         record.status,
         record.moderationMessageId ?? null,
         record.publishedMessageId ?? null,
+        record.userPendingMessageId ?? null,
         record.rejectionReason ?? null,
         record.moderatedByUserId !== undefined ? String(record.moderatedByUserId) : null,
         record.moderatedByUsername ?? null,
@@ -206,6 +212,7 @@ class PostgresStorage implements StorageBackend {
           status,
           moderation_message_id,
           published_message_id,
+          user_pending_message_id,
           rejection_reason,
           moderated_by_user_id,
           moderated_by_username,
@@ -248,12 +255,13 @@ class PostgresStorage implements StorageBackend {
           status = $9,
           moderation_message_id = $10,
           published_message_id = $11,
-          rejection_reason = $12,
-          moderated_by_user_id = $13,
-          moderated_by_username = $14,
-          moderated_by_first_name = $15,
-          moderated_at = $16
-        WHERE id = $17
+          user_pending_message_id = $12,
+          rejection_reason = $13,
+          moderated_by_user_id = $14,
+          moderated_by_username = $15,
+          moderated_by_first_name = $16,
+          moderated_at = $17
+        WHERE id = $18
       `,
       [
         String(nextRecord.userId),
@@ -267,6 +275,7 @@ class PostgresStorage implements StorageBackend {
         nextRecord.status,
         nextRecord.moderationMessageId ?? null,
         nextRecord.publishedMessageId ?? null,
+        nextRecord.userPendingMessageId ?? null,
         nextRecord.rejectionReason ?? null,
         nextRecord.moderatedByUserId !== undefined ? String(nextRecord.moderatedByUserId) : null,
         nextRecord.moderatedByUsername ?? null,
@@ -341,6 +350,7 @@ class SqliteStorage implements StorageBackend {
         status TEXT NOT NULL,
         moderation_message_id INTEGER,
         published_message_id INTEGER,
+        user_pending_message_id INTEGER,
         rejection_reason TEXT,
         moderated_by_user_id INTEGER,
         moderated_by_username TEXT,
@@ -348,6 +358,19 @@ class SqliteStorage implements StorageBackend {
         moderated_at TEXT
       )
     `);
+
+    const hasUserPendingMessageIdColumn = this.db
+      .prepare(`
+        SELECT 1
+        FROM pragma_table_info('submissions')
+        WHERE name = ?
+        LIMIT 1
+      `)
+      .get("user_pending_message_id");
+
+    if (!hasUserPendingMessageIdColumn) {
+      this.db.exec("ALTER TABLE submissions ADD COLUMN user_pending_message_id INTEGER");
+    }
   }
 
   async createSubmission(
@@ -370,12 +393,13 @@ class SqliteStorage implements StorageBackend {
           status,
           moderation_message_id,
           published_message_id,
+          user_pending_message_id,
           rejection_reason,
           moderated_by_user_id,
           moderated_by_username,
           moderated_by_first_name,
           moderated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `)
       .run(
         record.id,
@@ -390,6 +414,7 @@ class SqliteStorage implements StorageBackend {
         record.status,
         record.moderationMessageId ?? null,
         record.publishedMessageId ?? null,
+        record.userPendingMessageId ?? null,
         record.rejectionReason ?? null,
         record.moderatedByUserId ?? null,
         record.moderatedByUsername ?? null,
@@ -416,6 +441,7 @@ class SqliteStorage implements StorageBackend {
           status,
           moderation_message_id,
           published_message_id,
+          user_pending_message_id,
           rejection_reason,
           moderated_by_user_id,
           moderated_by_username,
@@ -457,6 +483,7 @@ class SqliteStorage implements StorageBackend {
           status = ?,
           moderation_message_id = ?,
           published_message_id = ?,
+          user_pending_message_id = ?,
           rejection_reason = ?,
           moderated_by_user_id = ?,
           moderated_by_username = ?,
@@ -476,6 +503,7 @@ class SqliteStorage implements StorageBackend {
         nextRecord.status,
         nextRecord.moderationMessageId ?? null,
         nextRecord.publishedMessageId ?? null,
+        nextRecord.userPendingMessageId ?? null,
         nextRecord.rejectionReason ?? null,
         nextRecord.moderatedByUserId ?? null,
         nextRecord.moderatedByUsername ?? null,

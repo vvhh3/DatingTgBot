@@ -2,7 +2,11 @@ import type { Context, Telegraf } from "telegraf";
 import { getSubmission, updateModerationStatus } from "../../storage/index.js";
 import { REJECT_REASONS, moderationKeyboard, rejectReasonsKeyboard } from "../keyboards.js";
 import { pendingRejectionNotes } from "../state.js";
-import { publishSubmission, updateModerationMessage } from "../services/moderation.js";
+import {
+  clearUserPendingMessage,
+  publishSubmission,
+  updateModerationMessage
+} from "../services/moderation.js";
 import { isAdmin, isTelegramErrorWithDescription } from "../utils.js";
 
 export function registerModerationActionHandlers(bot: Telegraf<Context>): void {
@@ -45,6 +49,7 @@ export function registerModerationActionHandlers(bot: Telegraf<Context>): void {
 
     if (updatedSubmission) {
       await updateModerationMessage(bot, updatedSubmission);
+      await clearUserPendingMessage(bot, updatedSubmission);
     }
 
     await ctx.answerCbQuery("Заявка отменена");
@@ -103,6 +108,7 @@ export function registerModerationActionHandlers(bot: Telegraf<Context>): void {
 
     if (updatedSubmission) {
       await updateModerationMessage(bot, updatedSubmission);
+      await clearUserPendingMessage(bot, updatedSubmission);
     }
 
     try {
@@ -159,6 +165,7 @@ export function registerModerationActionHandlers(bot: Telegraf<Context>): void {
 
     if (updatedSubmission) {
       await updateModerationMessage(bot, updatedSubmission);
+      await clearUserPendingMessage(bot, updatedSubmission);
     }
 
     try {
@@ -224,6 +231,7 @@ export function registerModerationActionHandlers(bot: Telegraf<Context>): void {
 
     if (updatedSubmission) {
       await updateModerationMessage(bot, updatedSubmission);
+      await clearUserPendingMessage(bot, updatedSubmission);
     }
 
     try {

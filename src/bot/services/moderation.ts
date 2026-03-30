@@ -2,7 +2,7 @@ import type { Context, Telegraf } from "telegraf";
 import { config } from "../../config/index.js";
 import type { SubmissionRecord } from "../../shared/types.js";
 import { moderationKeyboard } from "../keyboards.js";
-import { isMessageNotModifiedError } from "../utils.js";
+import { isMessageNotModifiedError, isTelegramErrorWithDescription } from "../utils.js";
 
 function formatPerson(username?: string, firstName?: string, id?: number): string {
   if (username) {
@@ -168,5 +168,33 @@ export async function updateModerationMessage(
     if (!isMessageNotModifiedError(error)) {
       throw error;
     }
+  }
+}
+
+export async function clearUserPendingMessage(
+  bot: Telegraf<Context>,
+  submission: SubmissionRecord
+): Promise<void> {
+  if (!submission.userPendingMessageId) {
+    return;
+  }
+
+  try {
+    await bot.telegram.editMessageReplyMarkup(
+      submission.userId,
+      submission.userPendingMessageId,
+      undefined,
+      undefined
+    );
+  } catch (error) {
+    if (
+      isMessageNotModifiedError(error) ||
+      isTelegramErrorWithDescription(error, "message to edit not found") ||
+      isTelegramErrorWithDescription(error, "message can't be edited")
+    ) {
+      return;
+    }
+
+    throw error;
   }
 }
