@@ -3,6 +3,8 @@ import dotenv from "dotenv";
 dotenv.config();
 
 function requireEnv(name: string): string {
+  // Обязательные переменные валидируем сразу при старте,
+  // чтобы не получать трудноуловимые runtime-ошибки позже.
   const value = process.env[name]?.trim();
 
   if (!value) {
@@ -18,6 +20,7 @@ function optionalEnv(name: string): string | undefined {
 }
 
 function parseChatId(name: string): number {
+  // Telegram chat id должен быть целым числом.
   const raw = requireEnv(name);
   const parsed = Number(raw);
 
@@ -33,6 +36,7 @@ function parseAdminIds(raw: string | undefined): Set<number> {
     return new Set();
   }
 
+  // Ожидаем csv-строку вида "123,456,789".
   const ids = raw
     .split(",")
     .map((item) => item.trim())
@@ -52,6 +56,8 @@ function parseCooldownSeconds(raw: string | undefined): number {
   const value = raw?.trim();
 
   if (!value) {
+    // Значение по умолчанию достаточно маленькое, чтобы не мешать обычному использованию,
+    // но уже защищает от спама и случайных дублей.
     return 15;
   }
 
@@ -83,6 +89,7 @@ function parseBoolean(raw: string | undefined, defaultValue = false): boolean {
 }
 
 export const config = {
+  // После парсинга остальной код работает только с нормализованным конфигом.
   botToken: requireEnv("BOT_TOKEN"),
   databaseUrl: optionalEnv("DATABASE_URL"),
   databaseSsl: parseBoolean(process.env.DATABASE_SSL, false),

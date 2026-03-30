@@ -22,7 +22,7 @@ import { extractSubmissionContent, isAdmin, isModerationChat } from "../utils.js
 
 export function registerMessageHandlers(bot: Telegraf<Context>): void {
   bot.on("message", async (ctx) => {
-    // В moderation chat обрабатываем reply модератора на запрос причины отклонения.
+    // В чате модерации ловим только ответ модератора на запрос причины отклонения.
     if (
       ctx.chat.type !== "private" &&
       isModerationChat(ctx.chat.id) &&
@@ -79,6 +79,7 @@ export function registerMessageHandlers(bot: Telegraf<Context>): void {
         }
 
         try {
+          // Ошибка уведомления автора не должна откатывать уже принятое решение по заявке.
           await ctx.telegram.sendMessage(
             submission.userId,
             [
@@ -96,6 +97,7 @@ export function registerMessageHandlers(bot: Telegraf<Context>): void {
       }
     }
 
+    // Новые пользовательские заявки принимаем только в личном чате с ботом.
     if (ctx.chat.type !== "private") {
       return;
     }
@@ -107,7 +109,7 @@ export function registerMessageHandlers(bot: Telegraf<Context>): void {
       return;
     }
 
-    // Медиа без подписи держим как черновик до следующего текстового сообщения.
+    // Медиа без подписи временно храним как черновик до следующего текстового сообщения.
     if ((content.contentType === "photo" || content.contentType === "video") && !content.text) {
       pendingMediaDrafts.set(ctx.from.id, {
         contentType: content.contentType,
@@ -123,6 +125,7 @@ export function registerMessageHandlers(bot: Telegraf<Context>): void {
     const isCompletingPendingDraft = content.contentType === "text" && Boolean(pendingMediaDraft);
 
     if (!isCompletingPendingDraft) {
+      // Дописывание подписи к уже сохранённому медиа не считается новой отправкой.
       const remainingSeconds = getCooldownRemainingSeconds(ctx.from.id);
 
       if (remainingSeconds > 0) {
@@ -146,7 +149,8 @@ export function registerMessageHandlers(bot: Telegraf<Context>): void {
             }
         : content;
 
-    // Локальная фильтрация отсекает слишком длинный или запрещённый контент до записи в storage.
+    // Здесь собираем окончательную заявку: либо одиночное сообщение,
+    // либо связку "сначала медиа, потом отдельный текст".
     const result = moderateText(submissionContent.text);
 
     if (!result.allowed) {
@@ -176,12 +180,14 @@ export function registerMessageHandlers(bot: Telegraf<Context>): void {
       userPendingSubmissionKeyboard(record.id)
     );
 
-    // Запоминаем id сообщений в чате модерации и в личке пользователя, чтобы потом обновлять их после решения.
+    // Запоминаем id сообщений в чате модерации и в личке пользователя,
+    // чтобы потом обновлять их после решения.
     await updateSubmission(record.id, {
       moderationMessageId: moderationMessage.message_id,
       userPendingMessageId: userPendingMessage.message_id
     });
 
+    // Кулдаун стартует только после того, как заявка реально создана и отправлена на модерацию.
     lastSubmissionAt.set(ctx.from.id, Date.now());
     pendingMediaDrafts.delete(ctx.from.id);
   });

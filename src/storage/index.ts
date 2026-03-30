@@ -47,6 +47,8 @@ type StorageBackend = {
 };
 
 function normalizeDate(value: string | Date | null | undefined): string | undefined {
+  // Разные базы возвращают даты в разных форматах.
+  // На выходе storage всегда отдаёт ISO-строку, чтобы остальной код не думал о backend-е.
   if (!value) {
     return undefined;
   }
@@ -55,6 +57,7 @@ function normalizeDate(value: string | Date | null | undefined): string | undefi
 }
 
 function normalizeBigInt(value: number | string | null | undefined): number | undefined {
+  // BIGINT из Postgres часто приходит строкой, SQLite обычно отдаёт number.
   if (value === null || value === undefined) {
     return undefined;
   }
@@ -67,6 +70,7 @@ function rowToSubmission(row: SubmissionRow | undefined): SubmissionRecord | und
     return undefined;
   }
 
+  // Централизованно переводим snake_case из БД в camelCase доменной модели.
   return {
     id: row.id,
     userId: normalizeBigInt(row.user_id) as number,
@@ -92,6 +96,8 @@ function rowToSubmission(row: SubmissionRow | undefined): SubmissionRecord | und
 function buildNewSubmissionRecord(
   payload: Omit<SubmissionRecord, "id" | "createdAt" | "status">
 ): SubmissionRecord {
+  // Идентификатор и время создания принадлежат storage-слою:
+  // вызывающий код описывает только содержимое заявки.
   return {
     ...payload,
     id: crypto.randomUUID(),
@@ -107,6 +113,7 @@ class PostgresStorage implements StorageBackend {
   });
 
   async initialize(): Promise<void> {
+    // Минимальная автоподготовка схемы. Это позволяет запускать бота без отдельного шага миграции.
     await this.pool.query(`
       CREATE TABLE IF NOT EXISTS submissions (
         id TEXT PRIMARY KEY,
@@ -234,6 +241,8 @@ class PostgresStorage implements StorageBackend {
       return undefined;
     }
 
+    // Обновление идёт через merge с текущей записью, потому что вызывающий код обычно меняет
+    // только часть полей: статус, moderationMessageId, причину отклонения и т.п.
     const nextRecord: SubmissionRecord = {
       ...existingRecord,
       ...updates,
@@ -330,12 +339,14 @@ class SqliteStorage implements StorageBackend {
   private readonly db: DatabaseSync;
 
   constructor(databasePath: string) {
+    // Для локальной разработки создаём каталог БД автоматически.
     const resolvedPath = path.resolve(databasePath);
     mkdirSync(path.dirname(resolvedPath), { recursive: true });
     this.db = new DatabaseSync(resolvedPath);
   }
 
   async initialize(): Promise<void> {
+    // Схема повторяет Postgres-структуру, чтобы переключение backend-а не влияло на бизнес-логику.
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS submissions (
         id TEXT PRIMARY KEY,
@@ -563,6 +574,7 @@ let schemaReadyPromise: Promise<void> | undefined;
 
 function ensureSchemaReady(): Promise<void> {
   if (!schemaReadyPromise) {
+    // Кэшируем именно Promise, чтобы параллельные первые обращения ждали одну и ту же инициализацию.
     schemaReadyPromise = backend.initialize();
   }
 

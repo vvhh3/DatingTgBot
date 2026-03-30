@@ -74,10 +74,12 @@ export function registerModerationActionHandlers(bot: Telegraf<Context>): void {
     }
 
     if (submission.status !== "pending") {
+      // Защита от повторных кликов по старым кнопкам.
       await ctx.answerCbQuery("Заявка уже обработана");
       return;
     }
 
+    // Первый экран отклонения — выбор типовой причины.
     await ctx.editMessageReplyMarkup(rejectReasonsKeyboard(submissionId).reply_markup);
   });
 
@@ -98,6 +100,7 @@ export function registerModerationActionHandlers(bot: Telegraf<Context>): void {
     const reason = REJECT_REASONS.find((item) => item.key === reasonKey);
     const textReason = reason?.label || "Отклонено модератором";
 
+    // Готовые причины нужны для быстрой модерации без ручного ввода.
     const updatedSubmission = await updateModerationStatus(submissionId, "rejected", {
       rejectionReason: textReason,
       moderatedByUserId: ctx.from.id,
@@ -205,6 +208,7 @@ export function registerModerationActionHandlers(bot: Telegraf<Context>): void {
     const moderatedAt = new Date().toISOString();
 
     try {
+      // Сначала пытаемся опубликовать, и только после успеха фиксируем approved в БД.
       published = await publishSubmission(ctx, submission);
     } catch (error) {
       if (isTelegramErrorWithDescription(error, "chat not found")) {
@@ -266,6 +270,7 @@ export function registerModerationActionHandlers(bot: Telegraf<Context>): void {
     }
 
     const prompt = await ctx.reply(
+      // Force reply помогает надёжно связать следующий ответ модератора с этой конкретной заявкой.
       "Напиши комментарий для автора в ответ на это сообщение. После этого заявка будет отклонена.",
       {
         reply_markup: {
@@ -275,6 +280,7 @@ export function registerModerationActionHandlers(bot: Telegraf<Context>): void {
       }
     );
 
+    // Запоминаем, какую заявку должен завершить следующий reply этого модератора.
     pendingRejectionNotes.set(ctx.from.id, {
       submissionId,
       promptMessageId: prompt.message_id

@@ -6,7 +6,7 @@ export const REJECT_REASONS = [
   { key: "spam", label: "🚫 Флуд / спам" },
   { key: "nsfw", label: "🔞 Запрещённый контент" },
   { key: "noReason", label: "☺ без причины" },
-  { key: "noReason", label: "😔 не по теме" },
+  { key: "offTopic", label: "😔 не по теме" },
   { key: "six", label: "☺ 67 +Реп W спайк дружелюбный бандит 52 ngg" }
 ] as const;
 

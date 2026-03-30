@@ -45,6 +45,7 @@ const confusableMap = new Map<string, string>([
 ]);
 
 function wholeWord(pattern: string): RegExp {
+  // Матчим запрещённый термин как отдельное слово, а не как часть безопасного текста.
   return new RegExp(`(?<![${WORD_CHAR_CLASS}])(?:${pattern})(?![${WORD_CHAR_CLASS}])`, "iu");
 }
 
@@ -53,6 +54,7 @@ function escapeForRegex(value: string): string {
 }
 
 function normalizeText(text: string): string {
+  // Нормализуем форму символов и пробелы, чтобы все последующие проверки работали по одному канону.
   return text
     .normalize("NFKC")
     .replace(/ё/giu, "е")
@@ -62,6 +64,7 @@ function normalizeText(text: string): string {
 }
 
 function toConfusableSkeleton(text: string): string {
+  // Сводим похожие кириллические и латинские символы к общей форме.
   return [...text].map((char) => confusableMap.get(char) ?? char).join("");
 }
 
@@ -70,6 +73,8 @@ function isSingleLetterToken(token: string): boolean {
 }
 
 function mergeSpacedLetterRuns(text: string): string {
+  // Собираем последовательности вроде "с п а м" в одно слово,
+  // если это действительно серия одиночных символов.
   const tokens = text.split(" ").filter(Boolean);
   const merged: string[] = [];
 
@@ -103,6 +108,7 @@ function mergeSpacedLetterRuns(text: string): string {
 }
 
 function compactObfuscatedRuns(text: string): string {
+  // Убираем разделители в искусственно "разорванных" словах: s.p.a.m, c-п-а-м и т.п.
   return text.replace(obfuscatedRunPattern, (match) => match.replace(obfuscationSeparators, ""));
 }
 
@@ -119,6 +125,8 @@ function isSingleWordTerm(term: string): boolean {
 }
 
 function isApproximateMatch(source: string, target: string): boolean {
+  // Разрешаем только одну правку и только для достаточно длинных слов,
+  // чтобы ловить простые опечатки без чрезмерного числа ложных срабатываний.
   if (source === target) {
     return true;
   }
@@ -174,6 +182,7 @@ function isApproximateMatch(source: string, target: string): boolean {
 }
 
 function loadBannedTerms(): string[] {
+  // Ищем словарь по нескольким путям, чтобы код одинаково работал из src и из dist.
   const candidateFiles = configuredBannedTermsFile
     ? [configuredBannedTermsFile, ...DEFAULT_BANNED_TERMS_FILES]
     : DEFAULT_BANNED_TERMS_FILES;
@@ -209,6 +218,8 @@ const bannedPatterns = loadBannedTerms().map((term) => {
 });
 
 export function moderateText(input: string): FilterResult {
+  // Проверяем текст в нескольких представлениях:
+  // обычный normal form, skeleton, слитные буквы и слова без маскирующих разделителей.
   const text = normalizeText(input);
   const confusableSkeleton = toConfusableSkeleton(text);
   const mergedSpacedLetters = mergeSpacedLetterRuns(confusableSkeleton);
