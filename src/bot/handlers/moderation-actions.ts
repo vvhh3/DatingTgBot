@@ -114,7 +114,7 @@ export function registerModerationActionHandlers(bot: Telegraf<Context>): void {
     try {
       await ctx.telegram.sendMessage(
         submission.userId,
-        `Твоё анонимное сообщение отклонено.\nПричина: ${textReason}`
+        `Твоё анонимное сообщение отклонено.😔\nПричина: ${textReason}`
       );
     } catch (error) {
       console.warn("Не удалось отправить уведомление пользователю после отклонения:", error);
@@ -237,7 +237,7 @@ export function registerModerationActionHandlers(bot: Telegraf<Context>): void {
     try {
       await ctx.telegram.sendMessage(
         submission.userId,
-        "Твоё анонимное сообщение прошло модерацию и было опубликовано."
+        "Твоё анонимное сообщение прошло модерацию и было опубликовано.❤️"
       );
     } catch (error) {
       console.warn("Не удалось отправить авто-уведомление пользователю после одобрения:", error);

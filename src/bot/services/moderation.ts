@@ -4,16 +4,26 @@ import type { SubmissionRecord } from "../../shared/types.js";
 import { moderationKeyboard } from "../keyboards.js";
 import { isMessageNotModifiedError, isTelegramErrorWithDescription } from "../utils.js";
 
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
 function formatPerson(username?: string, firstName?: string, id?: number): string {
-  if (username) {
-    return `@${username}`;
-  }
+  const label = username ? `@${username}` : firstName || "Пользователь";
 
   if (id) {
-    return `[${firstName || "Пользователь"}](tg://user?id=${id})`;
+    return `<a href="tg://user?id=${id}">${escapeHtml(label)}</a>`;
   }
 
-  return firstName || "Неизвестно";
+  if (username) {
+    return escapeHtml(`@${username}`);
+  }
+
+  return escapeHtml(firstName || "Неизвестно");
 }
 
 function formatDecision(status: SubmissionRecord["status"]): string {
@@ -57,7 +67,11 @@ function formatModerator(submission: SubmissionRecord): string {
     return "ещё не назначен";
   }
 
-  return formatPerson(submission.moderatedByUsername, submission.moderatedByFirstName);
+  return formatPerson(
+    submission.moderatedByUsername,
+    submission.moderatedByFirstName,
+    submission.moderatedByUserId
+  );
 }
 
 function formatContentType(submission: SubmissionRecord): string {
@@ -72,31 +86,30 @@ function formatContentType(submission: SubmissionRecord): string {
 }
 
 function buildModerationCaption(submission: SubmissionRecord): string {
-  const reasonLabel =
-    submission.status === "cancelled" ? "Причина отмены" : "Причина отклонения";
+  const reasonLabel = submission.status === "cancelled" ? "Причина отмены" : "Причина отклонения";
 
   return [
     "Новая анонимная заявка",
     "",
     `ID: ${submission.id}`,
     `Тип заявки: ${formatContentType(submission)}`,
-    `Отправитель: ${formatPerson(submission.username, submission.firstName)}`,
+    `Отправитель: ${formatPerson(submission.username, submission.firstName, submission.userId)}`,
     `Статус: ${formatDecision(submission.status)}`,
     `Решение принял: ${formatModerator(submission)}`,
-    submission.moderatedAt ? `Время решения: ${formatDateTime(submission.moderatedAt)}` : "",
-    submission.rejectionReason ? `${reasonLabel}: ${submission.rejectionReason}` : "",
+    submission.moderatedAt ? `Время решения: ${escapeHtml(formatDateTime(submission.moderatedAt))}` : "",
+    submission.rejectionReason ? `${reasonLabel}: ${escapeHtml(submission.rejectionReason)}` : "",
     "",
-    `Текст сообщения: ${submission.text}`
+    `Текст сообщения: ${escapeHtml(submission.text)}`
   ].filter(Boolean).join("\n");
 }
 
 export async function sendToModeration(ctx: Context, submission: SubmissionRecord) {
   const keyboard = moderationKeyboard(submission.id);
 
-  // Сохраняем исходный формат заявки и добавляем moderation keyboard.
   if (submission.contentType === "photo" && submission.photoFileId) {
     return ctx.telegram.sendPhoto(config.moderationChatId, submission.photoFileId, {
       caption: buildModerationCaption(submission),
+      parse_mode: "HTML",
       ...keyboard
     });
   }
@@ -104,19 +117,18 @@ export async function sendToModeration(ctx: Context, submission: SubmissionRecor
   if (submission.contentType === "video" && submission.videoFileId) {
     return ctx.telegram.sendVideo(config.moderationChatId, submission.videoFileId, {
       caption: buildModerationCaption(submission),
+      parse_mode: "HTML",
       ...keyboard
     });
   }
 
-  return ctx.telegram.sendMessage(
-    config.moderationChatId,
-    buildModerationCaption(submission),
-    keyboard
-  );
+  return ctx.telegram.sendMessage(config.moderationChatId, buildModerationCaption(submission), {
+    parse_mode: "HTML",
+    ...keyboard
+  });
 }
 
 export async function publishSubmission(ctx: Context, submission: SubmissionRecord) {
-  // В целевой чат публикуем заявку в том же формате, в каком её прислал пользователь.
   if (submission.contentType === "photo" && submission.photoFileId) {
     return ctx.telegram.sendPhoto(config.targetChatId, submission.photoFileId, {
       caption: submission.text || undefined
@@ -140,20 +152,21 @@ export async function updateModerationMessage(
     return;
   }
 
-  // После approve/reject обновляем текст moderation message и убираем кнопки.
   if (submission.contentType === "photo" || submission.contentType === "video") {
     await bot.telegram.editMessageCaption(
       config.moderationChatId,
       submission.moderationMessageId,
       undefined,
-      buildModerationCaption(submission)
+      buildModerationCaption(submission),
+      { parse_mode: "HTML" }
     );
   } else {
     await bot.telegram.editMessageText(
       config.moderationChatId,
       submission.moderationMessageId,
       undefined,
-      buildModerationCaption(submission)
+      buildModerationCaption(submission),
+      { parse_mode: "HTML" }
     );
   }
 
