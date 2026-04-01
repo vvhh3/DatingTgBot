@@ -1,21 +1,52 @@
 import { randomInt } from "node:crypto";
 import { Input } from "telegraf";
 import type { Context, Telegraf } from "telegraf";
+import { Markup } from "telegraf";
 import { config } from "../../config/index.js";
-import { createContest, createReferralIfFirstSeen, finishContest, getActiveContest, getConfirmedReferralCount, getContestTicketEntries, getReferralByInvitedUserId, registerContestParticipant, confirmReferral } from "../../storage/contest.js";
-import { getSubmissionStats } from "../../storage/index.js";
 import type { ContestTicketEntry } from "../../storage/contest.js";
+import {
+  confirmReferral,
+  createContest,
+  createReferralIfFirstSeen,
+  finishContest,
+  getActiveContest,
+  getConfirmedReferralCount,
+  getContestTicketEntries,
+  getReferralByInvitedUserId,
+  registerContestParticipant
+} from "../../storage/contest.js";
+import { getSubmissionStats } from "../../storage/index.js";
 import { referralSubscriptionKeyboard } from "../keyboards.js";
 import { botCommands, infoMessage, rulesMessage, welcomeCaption, welcomeDetails } from "../messages.js";
-import { buildReferralLink, extractStartPayload, formatContestUserLabel, isContestChannelMember, parseInviterUserId } from "../services/contest.js";
+import {
+  buildReferralLink,
+  extractStartPayload,
+  formatContestUserLabel,
+  isContestChannelMember,
+  parseInviterUserId
+} from "../services/contest.js";
 import { pendingMediaDrafts } from "../state.js";
-import { isAdmin, isModerationChat } from "../utils.js";
+import { isAdmin, isModerationChat, isTelegramErrorWithDescription } from "../utils.js";
 
 const CONTEST_WINNER_COUNT = 10;
+const MAIN_CONTEST_START_PAYLOAD = "contest_main";
+const DEFAULT_CONTEST_POST_TEXT = [
+  "Розыгрыш запущен!",
+  "",
+  "Как участвовать:",
+  "1. Нажми кнопку «Участвовать»",
+  "2. Получи личную ссылку в боте",
+  "3. Приглашай друзей",
+  "4. 1 подтверждённый приглашённый = 1 билет",
+  "",
+  "Победителей будет 10.",
+  "Чем больше билетов, тем выше шанс на победу."
+].join("\n");
 
 type ContestStartResult = {
   message?: string;
   showSubscriptionKeyboard?: boolean;
+  skipWelcome?: boolean;
 };
 
 async function sendWelcome(ctx: Context): Promise<void> {
@@ -84,12 +115,12 @@ function drawWeightedWinners(entries: ContestTicketEntry[], winnerCount: number)
     }
 
     const winningNumber = randomInt(totalTickets);
-    let current = 0;
+    let accumulatedTickets = 0;
     let selectedIndex = 0;
 
     for (let index = 0; index < pool.length; index += 1) {
-      current += pool[index].tickets;
-      if (winningNumber < current) {
+      accumulatedTickets += pool[index].tickets;
+      if (winningNumber < accumulatedTickets) {
         selectedIndex = index;
         break;
       }
@@ -100,6 +131,21 @@ function drawWeightedWinners(entries: ContestTicketEntry[], winnerCount: number)
   }
 
   return winners;
+}
+
+async function buildContestLinkMessage(ctx: Context, contestId: string, userId: number): Promise<string> {
+  const referralLink = await buildReferralLink(ctx, userId);
+  const tickets = await getConfirmedReferralCount(contestId, userId);
+
+  return [
+    "Ты участвуешь в конкурсе.",
+    "",
+    "Твоя личная ссылка:",
+    referralLink,
+    "",
+    "1 подтверждённый приглашённый = 1 билет.",
+    `Сейчас у тебя билетов: ${tickets}`
+  ].join("\n");
 }
 
 async function handleContestStart(ctx: Context): Promise<ContestStartResult | undefined> {
@@ -121,6 +167,13 @@ async function handleContestStart(ctx: Context): Promise<ContestStartResult | un
     firstName: ctx.from.first_name
   });
 
+  if (payload === MAIN_CONTEST_START_PAYLOAD) {
+    return {
+      message: await buildContestLinkMessage(ctx, activeContest.id, ctx.from.id),
+      skipWelcome: true
+    };
+  }
+
   if (!inviterUserId) {
     if (participant.isNew) {
       return {
@@ -136,25 +189,29 @@ async function handleContestStart(ctx: Context): Promise<ContestStartResult | un
 
     if (existingReferral?.status === "confirmed") {
       return {
-        message: "Твоё приглашение в текущем конкурсе уже подтверждено."
+        message: "Твоё приглашение в текущем конкурсе уже подтверждено.",
+        skipWelcome: true
       };
     }
 
     if (existingReferral?.status === "pending") {
       return {
         message: "Приглашение уже сохранено. Подпишись на канал и нажми кнопку ниже, чтобы оно засчиталось.",
-        showSubscriptionKeyboard: true
+        showSubscriptionKeyboard: true,
+        skipWelcome: true
       };
     }
 
     return {
-      message: "В текущем конкурсе засчитывается только первый источник входа нового пользователя."
+      message: "В текущем конкурсе засчитывается только первый источник входа нового пользователя.",
+      skipWelcome: true
     };
   }
 
   if (inviterUserId === ctx.from.id) {
     return {
-      message: "Свою собственную ссылку использовать нельзя."
+      message: "Свою собственную ссылку использовать нельзя.",
+      skipWelcome: true
     };
   }
 
@@ -175,14 +232,16 @@ async function handleContestStart(ctx: Context): Promise<ContestStartResult | un
         "Приглашение сохранено, но пока не засчитано.",
         "Подпишись на основной канал и нажми кнопку «Проверить подписку»."
       ].join("\n"),
-      showSubscriptionKeyboard: true
+      showSubscriptionKeyboard: true,
+      skipWelcome: true
     };
   }
 
   await confirmReferral(activeContest.id, ctx.from.id);
 
   return {
-    message: "Подписка подтверждена. Приглашение засчитано, а пригласивший получил 1 билет."
+    message: "Подписка подтверждена. Приглашение засчитано, а пригласивший получил 1 билет.",
+    skipWelcome: true
   };
 }
 
@@ -211,7 +270,9 @@ export function registerCommandHandlers(bot: Telegraf<Context>): void {
       );
     }
 
-    await sendWelcome(ctx);
+    if (!contestStartResult?.skipWelcome) {
+      await sendWelcome(ctx);
+    }
   });
 
   bot.command("myref", async (ctx) => {
@@ -233,18 +294,7 @@ export function registerCommandHandlers(bot: Telegraf<Context>): void {
       firstName: ctx.from.first_name
     });
 
-    const referralLink = await buildReferralLink(ctx, ctx.from.id);
-    const tickets = await getConfirmedReferralCount(activeContest.id, ctx.from.id);
-
-    await ctx.reply(
-      [
-        "Твоя реферальная ссылка:",
-        referralLink,
-        "",
-        "За 1 подтверждённого приглашённого начисляется 1 билет.",
-        `Сейчас у тебя билетов: ${tickets}`
-      ].join("\n")
-    );
+    await ctx.reply(await buildContestLinkMessage(ctx, activeContest.id, ctx.from.id));
   });
 
   bot.command("mytickets", async (ctx) => {
@@ -277,6 +327,8 @@ export function registerCommandHandlers(bot: Telegraf<Context>): void {
     }
 
     const contest = await createContest(CONTEST_WINNER_COUNT);
+    const botInfo = await ctx.telegram.getMe();
+    const contestPostLink = `https://t.me/${botInfo.username}?start=${MAIN_CONTEST_START_PAYLOAD}`;
 
     await ctx.reply(
       [
@@ -284,7 +336,11 @@ export function registerCommandHandlers(bot: Telegraf<Context>): void {
         `ID конкурса: ${contest.id}`,
         "Механика: 1 подтверждённый приглашённый = 1 билет.",
         `При финише будут выбраны ${contest.winnerCount} победителей по билетам.`,
-        "Участники получают ссылку командой /myref."
+        "",
+        "Ссылка для кнопки или поста в основном канале:",
+        contestPostLink,
+        "",
+        "Эту ссылку можно поставить на кнопку «Участвовать» в конкурсном посте."
       ].join("\n")
     );
   });
@@ -311,7 +367,7 @@ export function registerCommandHandlers(bot: Telegraf<Context>): void {
       winners.length > 0
         ? winners.map((winner, index) => {
             const label = formatContestUserLabel(winner.userId, winner.username, winner.firstName);
-            return `${index + 1}. ${label} — ${winner.tickets} билет(ов)`;
+            return `${index + 1}. ${label} - ${winner.tickets} билет(ов)`;
           })
         : ["Подтверждённых билетов нет, победителей выбрать не удалось."];
 
@@ -328,27 +384,71 @@ export function registerCommandHandlers(bot: Telegraf<Context>): void {
     );
   });
 
+  bot.command("contestPost", async (ctx) => {
+    if (!ensureContestAdminAccess(ctx)) {
+      await ctx.reply("Эту команду можно использовать только админам в чате модерации.");
+      return;
+    }
+
+    const activeContest = await getActiveContest();
+
+    if (!activeContest) {
+      await ctx.reply("Сначала запусти конкурс через /startContest.");
+      return;
+    }
+
+    const botInfo = await ctx.telegram.getMe();
+    const contestPostLink = `https://t.me/${botInfo.username}?start=${MAIN_CONTEST_START_PAYLOAD}`;
+
+    try {
+      await ctx.telegram.sendMessage(config.contestChannelId, DEFAULT_CONTEST_POST_TEXT, {
+        reply_markup: Markup.inlineKeyboard([
+          [Markup.button.url("Участвовать", contestPostLink)]
+        ]).reply_markup
+      });
+
+      await ctx.reply("Конкурсный пост опубликован в основной канал.");
+    } catch (error) {
+      if (isTelegramErrorWithDescription(error, "chat not found")) {
+        await ctx.reply(
+          "Не удалось опубликовать пост. Проверь CONTEST_CHANNEL_ID и добавлен ли бот в канал."
+        );
+        return;
+      }
+
+      if (
+        isTelegramErrorWithDescription(error, "not enough rights") ||
+        isTelegramErrorWithDescription(error, "need administrator rights")
+      ) {
+        await ctx.reply("Боту не хватает прав для публикации в канале. Выдай ему права администратора.");
+        return;
+      }
+
+      throw error;
+    }
+  });
+
   bot.command("cancel", async (ctx) => {
     if (!ctx.from) {
       return;
     }
 
     if (pendingMediaDrafts.delete(ctx.from.id)) {
-      await ctx.reply("Р§РµСЂРЅРѕРІРёРє РјРµРґРёР° СѓРґР°Р»С‘РЅ.");
+      await ctx.reply("Черновик медиа удалён.");
       return;
     }
 
-    await ctx.reply("РЎРѕС…СЂР°РЅС‘РЅРЅРѕРіРѕ С‡РµСЂРЅРѕРІРёРєР° РјРµРґРёР° СЃРµР№С‡Р°СЃ РЅРµС‚.");
+    await ctx.reply("Сохранённого черновика медиа сейчас нет.");
   });
 
   bot.command("stats", async (ctx) => {
     if (!isAdmin(ctx.from?.id)) {
-      await ctx.reply("РќРµРґРѕСЃС‚Р°С‚РѕС‡РЅРѕ РїСЂР°РІ.");
+      await ctx.reply("Недостаточно прав.");
       return;
     }
 
-    if (!isModerationChat(ctx.chat.id)) {
-      await ctx.reply("Р­С‚Сѓ РєРѕРјР°РЅРґСѓ РјРѕР¶РЅРѕ РёСЃРїРѕР»СЊР·РѕРІР°С‚СЊ С‚РѕР»СЊРєРѕ РІ С‡Р°С‚Рµ РјРѕРґРµСЂР°С†РёРё.");
+    if (!ctx.chat || !isModerationChat(ctx.chat.id)) {
+      await ctx.reply("Эту команду можно использовать только в чате модерации.");
       return;
     }
 
