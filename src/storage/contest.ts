@@ -486,7 +486,7 @@ class PostgresContestStorage implements ContestStorageBackend {
           p.user_id,
           p.username,
           p.first_name,
-          COUNT(r.id)::text AS tickets
+          (COUNT(r.id) + 1)::text AS tickets
         FROM contest_participants p
         LEFT JOIN referrals r
           ON r.contest_id = p.contest_id
@@ -494,8 +494,7 @@ class PostgresContestStorage implements ContestStorageBackend {
          AND r.status = 'confirmed'
         WHERE p.contest_id = $1
         GROUP BY p.user_id, p.username, p.first_name
-        HAVING COUNT(r.id) > 0
-        ORDER BY COUNT(r.id) DESC, p.user_id ASC
+        ORDER BY (COUNT(r.id) + 1) DESC, p.user_id ASC
       `,
       [contestId]
     );
@@ -796,7 +795,7 @@ class SqliteContestStorage implements ContestStorageBackend {
           p.user_id,
           p.username,
           p.first_name,
-          COUNT(r.id) AS tickets
+          COUNT(r.id) + 1 AS tickets
         FROM contest_participants p
         LEFT JOIN referrals r
           ON r.contest_id = p.contest_id
@@ -804,8 +803,7 @@ class SqliteContestStorage implements ContestStorageBackend {
          AND r.status = 'confirmed'
         WHERE p.contest_id = ?
         GROUP BY p.user_id, p.username, p.first_name
-        HAVING COUNT(r.id) > 0
-        ORDER BY COUNT(r.id) DESC, p.user_id ASC
+        ORDER BY COUNT(r.id) + 1 DESC, p.user_id ASC
       `)
       .all(contestId) as ContestTicketRow[];
 

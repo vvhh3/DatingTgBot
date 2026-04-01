@@ -37,7 +37,8 @@ const DEFAULT_CONTEST_POST_TEXT = [
   "1. Нажми кнопку «Участвовать»",
   "2. Получи личную ссылку в боте",
   "3. Приглашай друзей",
-  "4. 1 подтверждённый приглашённый = 1 билет",
+  "4. За участие даётся 1 билет",
+  "5. Каждый подтверждённый приглашённый даёт ещё 1 билет",
   "",
   "Победителей будет 10.",
   "Чем больше билетов, тем выше шанс на победу."
@@ -135,7 +136,7 @@ function drawWeightedWinners(entries: ContestTicketEntry[], winnerCount: number)
 
 async function buildContestLinkMessage(ctx: Context, contestId: string, userId: number): Promise<string> {
   const referralLink = await buildReferralLink(ctx, userId);
-  const tickets = await getConfirmedReferralCount(contestId, userId);
+  const tickets = (await getConfirmedReferralCount(contestId, userId)) + 1;
 
   return [
     "Ты участвуешь в конкурсе.",
@@ -143,7 +144,8 @@ async function buildContestLinkMessage(ctx: Context, contestId: string, userId: 
     "Твоя личная ссылка:",
     referralLink,
     "",
-    "1 подтверждённый приглашённый = 1 билет.",
+    "За участие даётся 1 билет.",
+    "Каждый подтверждённый приглашённый даёт ещё 1 билет.",
     `Сейчас у тебя билетов: ${tickets}`
   ].join("\n");
 }
@@ -309,7 +311,7 @@ export function registerCommandHandlers(bot: Telegraf<Context>): void {
       return;
     }
 
-    const tickets = await getConfirmedReferralCount(activeContest.id, ctx.from.id);
+    const tickets = (await getConfirmedReferralCount(activeContest.id, ctx.from.id)) + 1;
 
     await ctx.reply(`У тебя ${tickets} билет(ов) в текущем конкурсе.`);
   });
@@ -334,7 +336,7 @@ export function registerCommandHandlers(bot: Telegraf<Context>): void {
       [
         "Конкурс запущен.",
         `ID конкурса: ${contest.id}`,
-        "Механика: 1 подтверждённый приглашённый = 1 билет.",
+        "Механика: 1 билет за участие + 1 билет за каждого подтверждённого приглашённого.",
         `При финише будут выбраны ${contest.winnerCount} победителей по билетам.`,
         "",
         "Ссылка для кнопки или поста в основном канале:",
@@ -369,7 +371,7 @@ export function registerCommandHandlers(bot: Telegraf<Context>): void {
             const label = formatContestUserLabel(winner.userId, winner.username, winner.firstName);
             return `${index + 1}. ${label} - ${winner.tickets} билет(ов)`;
           })
-        : ["Подтверждённых билетов нет, победителей выбрать не удалось."];
+        : ["Участников конкурса нет, победителей выбрать не удалось."];
 
     await ctx.reply(
       [
@@ -380,6 +382,44 @@ export function registerCommandHandlers(bot: Telegraf<Context>): void {
         "",
         "Победители:",
         ...winnerLines
+      ].join("\n")
+    );
+  });
+
+  bot.command("contestStats", async (ctx) => {
+    if (!ensureContestAdminAccess(ctx)) {
+      await ctx.reply("Эту команду можно использовать только админам в чате модерации.");
+      return;
+    }
+
+    const activeContest = await getActiveContest();
+
+    if (!activeContest) {
+      await ctx.reply("Сейчас нет активного конкурса.");
+      return;
+    }
+
+    const ticketEntries = await getContestTicketEntries(activeContest.id);
+    const totalTickets = ticketEntries.reduce((sum, entry) => sum + entry.tickets, 0);
+    const topEntries = ticketEntries.slice(0, 10);
+    const topLines =
+      topEntries.length > 0
+        ? topEntries.map((entry, index) => {
+            const label = formatContestUserLabel(entry.userId, entry.username, entry.firstName);
+            return `${index + 1}. ${label} - ${entry.tickets} билет(ов)`;
+          })
+        : ["Пока участников нет."];
+
+    await ctx.reply(
+      [
+        "Статистика конкурса",
+        `ID конкурса: ${activeContest.id}`,
+        `Победителей будет: ${activeContest.winnerCount}`,
+        `Всего участников: ${ticketEntries.length}`,
+        `Всего билетов: ${totalTickets}`,
+        "",
+        "Топ участников:",
+        ...topLines
       ].join("\n")
     );
   });
