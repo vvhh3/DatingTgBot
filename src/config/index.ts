@@ -31,6 +31,22 @@ function parseChatId(name: string): number {
   return parsed;
 }
 
+function parseOptionalChatId(name: string): number | undefined {
+  const raw = optionalEnv(name);
+
+  if (!raw) {
+    return undefined;
+  }
+
+  const parsed = Number(raw);
+
+  if (!Number.isInteger(parsed)) {
+    throw new Error(`Env var ${name} must be an integer`);
+  }
+
+  return parsed;
+}
+
 function parseAdminIds(raw: string | undefined): Set<number> {
   if (!raw) {
     return new Set();
@@ -88,6 +104,8 @@ function parseBoolean(raw: string | undefined, defaultValue = false): boolean {
   throw new Error("Env var DATABASE_SSL must be a boolean-like value");
 }
 
+const targetChatId = parseChatId("TARGET_CHAT_ID");
+
 export const config = {
   // После парсинга остальной код работает только с нормализованным конфигом.
   botToken: requireEnv("BOT_TOKEN"),
@@ -99,7 +117,9 @@ export const config = {
   startPhotoPath: optionalEnv("START_PHOTO_PATH"),
   startVideo: optionalEnv("START_VIDEO"),
   moderationChatId: parseChatId("MODERATION_CHAT_ID"),
-  targetChatId: parseChatId("TARGET_CHAT_ID"),
+  targetChatId,
+  contestChannelId: parseOptionalChatId("CONTEST_CHANNEL_ID") ?? targetChatId,
+  contestChannelUrl: optionalEnv("CONTEST_CHANNEL_URL"),
   adminUserIds: parseAdminIds(process.env.ADMIN_USER_IDS),
   displayTimeZone: parseTimeZone(process.env.DISPLAY_TIMEZONE),
   submissionCooldownSeconds: parseCooldownSeconds(process.env.SUBMISSION_COOLDOWN_SECONDS)

@@ -5,6 +5,7 @@ import { registerCommandHandlers } from "./handlers/commands.js";
 import { registerCoreHandlers } from "./handlers/core.js";
 import { registerMessageHandlers } from "./handlers/messages.js";
 import { registerModerationActionHandlers } from "./handlers/moderation-actions.js";
+import { registerReferralActionHandlers } from "./handlers/referral-actions.js";
 
 const bot = new Telegraf<Context>(config.botToken);
 
@@ -15,6 +16,7 @@ console.log("BOT STARTED");
 registerCoreHandlers(bot);
 registerCommandHandlers(bot);
 registerModerationActionHandlers(bot);
+registerReferralActionHandlers(bot);
 registerMessageHandlers(bot);
 
 bot.launch();
