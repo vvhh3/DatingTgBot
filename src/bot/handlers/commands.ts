@@ -205,7 +205,7 @@ async function handleContestStart(ctx: Context): Promise<ContestStartResult | un
     }
 
     return {
-      message: "В текущем конкурсе засчитывается только первый источник входа нового пользователя.",
+      message: "Ты уже участвуешь в конкурсе. Получить свою реферальную ссылку можно командой /myref.",
       skipWelcome: true
     };
   }
@@ -262,6 +262,10 @@ export function registerCommandHandlers(bot: Telegraf<Context>): void {
     await ctx.reply(infoMessage);
   });
 
+  bot.command("myref", async (ctx) => {
+    await ctx.reply("266");
+  });
+
   bot.start(async (ctx) => {
     const contestStartResult = await handleContestStart(ctx);
 
@@ -299,22 +303,6 @@ export function registerCommandHandlers(bot: Telegraf<Context>): void {
     await ctx.reply(await buildContestLinkMessage(ctx, activeContest.id, ctx.from.id));
   });
 
-  bot.command("mytickets", async (ctx) => {
-    if (!ctx.from) {
-      return;
-    }
-
-    const activeContest = await getActiveContest();
-
-    if (!activeContest) {
-      await ctx.reply("Сейчас активного конкурса нет.");
-      return;
-    }
-
-    const tickets = (await getConfirmedReferralCount(activeContest.id, ctx.from.id)) + 1;
-
-    await ctx.reply(`У тебя ${tickets} билет(ов) в текущем конкурсе.`);
-  });
 
   bot.command("startContest", async (ctx) => {
     if (!ensureContestAdminAccess(ctx)) {

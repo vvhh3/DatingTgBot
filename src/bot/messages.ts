@@ -41,7 +41,6 @@ export const welcomeDetails = [
 
 export const botCommands = [
   { command: "myref", description: "Моя ссылка для конкурса" },
-  { command: "mytickets", description: "Мои билеты в конкурсе" },
   { command: "rules", description: "Правила анонимных сообщений" },
   { command: "info", description: "Информация о боте" }
 ];
