@@ -30,18 +30,27 @@ import { isAdmin, isModerationChat, isTelegramErrorWithDescription } from "../ut
 
 const CONTEST_WINNER_COUNT = 10;
 const MAIN_CONTEST_START_PAYLOAD = "contest_main";
+
 const DEFAULT_CONTEST_POST_TEXT = [
+  "💫 Возможно, всё начнётся с одного клика…",
+  "",
   "Розыгрыш запущен!",
   "",
-  "Как участвовать:",
-  "1. Нажми кнопку «Участвовать»",
-  "2. Получи личную ссылку в боте",
-  "3. Приглашай друзей",
-  "4. За участие даётся 1 билет",
-  "5. Каждый подтверждённый приглашённый даёт ещё 1 билет",
+  "Мы запускаем его среди тех,",
+  "кто готов к новым знакомствам 💘",
   "",
-  "Победителей будет 10.",
-  "Чем больше билетов, тем выше шанс на победу."
+  "Как участвовать:",
+  "1️⃣ Нажми кнопку «Участвовать»",
+  "2️⃣ Получи личную ссылку в боте",
+  "3️⃣ Приглашай друзей",
+  "",
+  "🎟 За участие даётся 1 билет",
+  "👥 Каждый приглашённый друг даёт ещё 1 билет",
+  "",
+  "🏆 Победителей будет 10",
+  "",
+  "Больше билетов = больше шанс выйграть 😉",
+  "Удачи! ❤️",
 ].join("\n");
 
 type ContestStartResult = {
@@ -139,14 +148,18 @@ async function buildContestLinkMessage(ctx: Context, contestId: string, userId: 
   const tickets = (await getConfirmedReferralCount(contestId, userId)) + 1;
 
   return [
-    "Ты участвуешь в конкурсе.",
+    "Ты участвуешь в конкурсе😎",
     "",
-    "Твоя личная ссылка:",
+    "За участие ты уже получил 1 билет",
+    "Приглашай друзей — каждый даёт ещё +1 билет",
+    "",
+    "Твоя пригласительная ссылка:",
     referralLink,
     "",
-    "За участие даётся 1 билет.",
-    "Каждый подтверждённый приглашённый даёт ещё 1 билет.",
-    `Сейчас у тебя билетов: ${tickets}`
+    `Сейчас у тебя билетов: ${tickets}`,
+    "",
+    "Чем больше билетов, тем выше шансы 😉",
+    "Удачи! ❤️"
   ].join("\n");
 }
 
@@ -252,7 +265,16 @@ function ensureContestAdminAccess(ctx: Context): boolean {
 }
 
 export function registerCommandHandlers(bot: Telegraf<Context>): void {
-  bot.telegram.setMyCommands(botCommands);
+  void Promise.all([
+    bot.telegram.setMyCommands(botCommands),
+    bot.telegram.setMyCommands(botCommands, {
+      scope: {
+        type: "all_private_chats"
+      }
+    })
+  ]).catch((error) => {
+    console.error("Failed to register bot commands.", error);
+  });
 
   bot.command("rules", async (ctx) => {
     await ctx.reply(rulesMessage);
@@ -262,9 +284,6 @@ export function registerCommandHandlers(bot: Telegraf<Context>): void {
     await ctx.reply(infoMessage);
   });
 
-  bot.command("myref", async (ctx) => {
-    await ctx.reply("266");
-  });
 
   bot.start(async (ctx) => {
     const contestStartResult = await handleContestStart(ctx);
@@ -318,19 +337,19 @@ export function registerCommandHandlers(bot: Telegraf<Context>): void {
 
     const contest = await createContest(CONTEST_WINNER_COUNT);
     const botInfo = await ctx.telegram.getMe();
-    const contestPostLink = `https://t.me/${botInfo.username}?start=${MAIN_CONTEST_START_PAYLOAD}`;
+    // const contestPostLink = `https://t.me/${botInfo.username}?start=${MAIN_CONTEST_START_PAYLOAD}`;
 
     await ctx.reply(
       [
         "Конкурс запущен.",
         `ID конкурса: ${contest.id}`,
-        "Механика: 1 билет за участие + 1 билет за каждого подтверждённого приглашённого.",
         `При финише будут выбраны ${contest.winnerCount} победителей по билетам.`,
         "",
-        "Ссылка для кнопки или поста в основном канале:",
-        contestPostLink,
+        "Введите /contestPost, чтобы опубликовать конкурсный пост в канале и начать привлекать участников",
         "",
-        "Эту ссылку можно поставить на кнопку «Участвовать» в конкурсном посте."
+        "Введите /finishContest, когда нужно завершить конкурс и выбрать победителей",
+        "Введите /contestStats, чтобы посмотреть текущую статистику конкурса",
+        ""
       ].join("\n")
     );
   });
@@ -356,9 +375,9 @@ export function registerCommandHandlers(bot: Telegraf<Context>): void {
     const winnerLines =
       winners.length > 0
         ? winners.map((winner, index) => {
-            const label = formatContestUserLabel(winner.userId, winner.username, winner.firstName);
-            return `${index + 1}. ${label} - ${winner.tickets} билет(ов)`;
-          })
+          const label = formatContestUserLabel(winner.userId, winner.username, winner.firstName);
+          return `${index + 1}. ${label} - ${winner.tickets} билет(ов)`;
+        })
         : ["Участников конкурса нет, победителей выбрать не удалось."];
 
     await ctx.reply(
@@ -393,9 +412,9 @@ export function registerCommandHandlers(bot: Telegraf<Context>): void {
     const topLines =
       topEntries.length > 0
         ? topEntries.map((entry, index) => {
-            const label = formatContestUserLabel(entry.userId, entry.username, entry.firstName);
-            return `${index + 1}. ${label} - ${entry.tickets} билет(ов)`;
-          })
+          const label = formatContestUserLabel(entry.userId, entry.username, entry.firstName);
+          return `${index + 1}. ${label} - ${entry.tickets} билет(ов)`;
+        })
         : ["Пока участников нет."];
 
     await ctx.reply(
