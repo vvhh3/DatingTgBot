@@ -159,7 +159,8 @@ async function buildContestLinkMessage(ctx: Context, contestId: string, userId: 
     `Сейчас у тебя билетов: ${tickets}`,
     "",
     "Чем больше билетов, тем выше шансы 😉",
-    "Удачи! ❤️"
+    "Удачи! ❤️",
+    "P.S введи команду /myref, и я покажу тебе твою ссылку и количество билетов в любой момент"
   ].join("\n");
 }
 
@@ -348,6 +349,7 @@ export function registerCommandHandlers(bot: Telegraf<Context>): void {
         "Введите /contestPost, чтобы опубликовать конкурсный пост в канале и начать привлекать участников",
         "",
         "Введите /finishContest, когда нужно завершить конкурс и выбрать победителей",
+        "",
         "Введите /contestStats, чтобы посмотреть текущую статистику конкурса",
         ""
       ].join("\n")
