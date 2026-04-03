@@ -1,4 +1,5 @@
 import { randomInt } from "node:crypto";
+import { resolve } from "node:path";
 import { Input } from "telegraf";
 import type { Context, Telegraf } from "telegraf";
 import { Markup } from "telegraf";
@@ -30,11 +31,12 @@ import { isAdmin, isModerationChat, isTelegramErrorWithDescription } from "../ut
 
 const CONTEST_WINNER_COUNT = 10;
 const MAIN_CONTEST_START_PAYLOAD = "contest_main";
+const CONTEST_POST_PHOTO_PATH = resolve(process.cwd(), "assets", "contest-photo.jpg");
 
 const DEFAULT_CONTEST_POST_TEXT = [
   "💫 Возможно, всё начнётся с одного клика…",
   "",
-  "Розыгрыш запущен!",
+  "Розыгрыш на тг подарки запущен!",
   "",
   "Мы запускаем его среди тех,",
   "кто готов к новым знакомствам 💘",
@@ -450,7 +452,8 @@ export function registerCommandHandlers(bot: Telegraf<Context>): void {
     const contestPostLink = `https://t.me/${botInfo.username}?start=${MAIN_CONTEST_START_PAYLOAD}`;
 
     try {
-      await ctx.telegram.sendMessage(config.contestChannelId, DEFAULT_CONTEST_POST_TEXT, {
+      await ctx.telegram.sendPhoto(config.contestChannelId, Input.fromLocalFile(CONTEST_POST_PHOTO_PATH), {
+        caption: DEFAULT_CONTEST_POST_TEXT,
         reply_markup: Markup.inlineKeyboard([
           [Markup.button.url("Участвовать", contestPostLink)]
         ]).reply_markup
