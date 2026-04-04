@@ -152,22 +152,28 @@ export async function updateModerationMessage(
     return;
   }
 
-  if (submission.contentType === "photo" || submission.contentType === "video") {
-    await bot.telegram.editMessageCaption(
-      config.moderationChatId,
-      submission.moderationMessageId,
-      undefined,
-      buildModerationCaption(submission),
-      { parse_mode: "HTML" }
-    );
-  } else {
-    await bot.telegram.editMessageText(
-      config.moderationChatId,
-      submission.moderationMessageId,
-      undefined,
-      buildModerationCaption(submission),
-      { parse_mode: "HTML" }
-    );
+  try {
+    if (submission.contentType === "photo" || submission.contentType === "video") {
+      await bot.telegram.editMessageCaption(
+        config.moderationChatId,
+        submission.moderationMessageId,
+        undefined,
+        buildModerationCaption(submission),
+        { parse_mode: "HTML" }
+      );
+    } else {
+      await bot.telegram.editMessageText(
+        config.moderationChatId,
+        submission.moderationMessageId,
+        undefined,
+        buildModerationCaption(submission),
+        { parse_mode: "HTML" }
+      );
+    }
+  } catch (error) {
+    if (!isMessageNotModifiedError(error)) {
+      throw error;
+    }
   }
 
   try {

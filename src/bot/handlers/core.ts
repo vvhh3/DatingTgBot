@@ -2,10 +2,21 @@ import type { Context, Telegraf } from "telegraf";
 import { config } from "../../config/index.js";
 import { isAdmin } from "../utils.js";
 
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+function truncate(value: string, maxLength: number): string {
+  return value.length > maxLength ? `${value.slice(0, maxLength - 3)}...` : value;
+}
+
 export function registerCoreHandlers(bot: Telegraf<Context>): void {
   bot.command("test_error", async (ctx) => {
     if (isAdmin(ctx.from?.id)) {
-      throw new Error("💥 Это тестовая ошибка для проверки отправки в чат модеров");
+      throw new Error("💥 Это тестовая ошибка для проверки отправки в чат модераторов");
     } else {
       await ctx.reply("Команда доступна только админам");
     }
@@ -38,23 +49,28 @@ export function registerCoreHandlers(bot: Telegraf<Context>): void {
       payload = callbackQuery?.data || "";
     }
 
-    const humanInfoLines = [
-      "❌ *ОШИБКА БОТА*",
-      "",
-      `Тип апдейта: ${updateType ?? "неизвестно"}`,
-      `Чат: ${chatId ?? "?"} (${chatType ?? "?"})`,
-      `Пользователь: ${fromId ?? "?"} (${username ? "@" + username : firstName ?? "неизвестно"})`,
-      payload ? `Данные: ${payload}` : "",
-      "",
-      `Сообщение: ${error.message}`,
-      "",
-      "Stack:"
-    ].filter(Boolean);
+    const safeUpdateType = escapeHtml(updateType ?? "неизвестно");
+    const safeChatType = escapeHtml(chatType ?? "?");
+    const safeUserLabel = escapeHtml(username ? `@${username}` : firstName ?? "неизвестно");
+    const safePayload = payload ? escapeHtml(truncate(payload, 800)) : "";
+    const safeMessage = escapeHtml(truncate(error.message, 1000));
+    const safeStack = escapeHtml(truncate(stack, 2500));
 
-    const text = humanInfoLines.join("\n") + `\n\`\`\`\n${stack}\n\`\`\``;
+    const text = [
+      "❌ <b>ОШИБКА БОТА</b>",
+      "",
+      `Тип апдейта: <code>${safeUpdateType}</code>`,
+      `Чат: <code>${chatId ?? "?"}</code> (${safeChatType})`,
+      `Пользователь: <code>${fromId ?? "?"}</code> (${safeUserLabel})`,
+      safePayload ? `Данные: <code>${safePayload}</code>` : "",
+      "",
+      `Сообщение: ${safeMessage}`,
+      "",
+      `<pre>${safeStack}</pre>`
+    ].filter(Boolean).join("\n");
 
     try {
-      await bot.telegram.sendMessage(config.moderationChatId, text, { parse_mode: "Markdown" });
+      await bot.telegram.sendMessage(config.moderationChatId, text, { parse_mode: "HTML" });
     } catch (sendErr) {
       console.error("Failed to send error to moderation chat:", sendErr);
     }
