@@ -12,6 +12,7 @@ export const REJECT_REASONS = [
   { key: "six", label: "☺ 67 +Реп W спайк дружелюбный бандит 52 ngg" }
 ] as const;
 
+
 export function moderationKeyboard(submissionId: string) {
   return Markup.inlineKeyboard([
     [
