@@ -9,6 +9,7 @@ export const REJECT_REASONS = [
   { key: "noReason", label: "☺ Без причины" },
   { key: "offTopic", label: "😔 Не по теме" },
   { key: "zavoz", label: "😂 w завозик" },
+  { key: "zaebal", label: "заебал🤬" },
   { key: "six", label: "☺ 67 +Реп W спайк дружелюбный бандит 52 ngg" }
 ] as const;
 
