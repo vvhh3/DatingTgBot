@@ -535,6 +535,15 @@ export function registerCommandHandlers(bot: Telegraf<Context>): void {
       bannedByUsername: ctx.from.username,
       bannedByFirstName: ctx.from.first_name
     });
+    
+    try {
+      await ctx.telegram.sendMessage(
+        userId,
+        "Ваш аккаунт был заблокирован. Новые заявки от вас больше не принимаются."
+      );
+    } catch (error) {
+      console.error(`Не удалось отправить сообщение пользователю ${userId}`, error);
+    }
 
     await ctx.reply(`Пользователь ${userId} забанен. Новые заявки от него не будут приниматься.`);
   });

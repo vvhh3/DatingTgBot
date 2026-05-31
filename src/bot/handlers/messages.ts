@@ -108,7 +108,7 @@ export function registerMessageHandlers(bot: Telegraf<Context>): void {
     }
 
     if (await isUserBanned(ctx.from.id)) {
-      await ctx.reply("РўС‹ РЅРµ РјРѕР¶РµС€СЊ РѕС‚РїСЂР°РІР»СЏС‚СЊ Р·Р°СЏРІРєРё: РґРѕСЃС‚СѓРї РѕРіСЂР°РЅРёС‡РµРЅ РјРѕРґРµСЂР°С‚РѕСЂРѕРј.");
+      await ctx.reply("Вы были забанены администрацией😧");
       return;
     }
 
