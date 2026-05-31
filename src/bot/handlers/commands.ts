@@ -562,11 +562,16 @@ export function registerCommandHandlers(bot: Telegraf<Context>): void {
     }
 
     const removed = await unbanUser(userId);
-    await ctx.reply(
-      removed
-        ? `Пользователь ${userId} разбанен.`
-        : `Пользователь ${userId} не был в бане.`
-    );
+    if(removed) {
+      await ctx.reply(`Пользователь ${userId} разбанен.`)
+    }else{
+      await ctx.reply(`Пользователь ${userId} не был в бане.`)
+    }
+    // await ctx.reply(
+    //   removed
+    //     ? `Пользователь ${userId} разбанен.`
+    //     : `Пользователь ${userId} не был в бане.`
+    // );
   });
 
   bot.command("stats", async (ctx) => {
