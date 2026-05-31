@@ -38,12 +38,23 @@ type SubmissionStats = {
   videoCount: number;
 };
 
+export type BannedUserRecord = {
+  userId: number;
+  bannedByUserId: number;
+  bannedByUsername?: string;
+  bannedByFirstName?: string;
+  bannedAt: string;
+};
+
 type StorageBackend = {
   initialize(): Promise<void>;
   createSubmission(payload: Omit<SubmissionRecord, "id" | "createdAt" | "status">): Promise<SubmissionRecord>;
   getSubmission(id: string): Promise<SubmissionRecord | undefined>;
   updateSubmission(id: string, updates: Partial<SubmissionRecord>): Promise<SubmissionRecord | undefined>;
   getSubmissionStats(): Promise<SubmissionStats>;
+  banUser(payload: Omit<BannedUserRecord, "bannedAt">): Promise<BannedUserRecord>;
+  unbanUser(userId: number): Promise<boolean>;
+  isUserBanned(userId: number): Promise<boolean>;
 };
 
 function normalizeDate(value: string | Date | null | undefined): string | undefined {
@@ -106,6 +117,22 @@ function buildNewSubmissionRecord(
   };
 }
 
+function rowToBannedUser(row: {
+  user_id: number | string;
+  banned_by_user_id: number | string;
+  banned_by_username: string | null;
+  banned_by_first_name: string | null;
+  banned_at: string | Date;
+}): BannedUserRecord {
+  return {
+    userId: normalizeBigInt(row.user_id) as number,
+    bannedByUserId: normalizeBigInt(row.banned_by_user_id) as number,
+    bannedByUsername: row.banned_by_username ?? undefined,
+    bannedByFirstName: row.banned_by_first_name ?? undefined,
+    bannedAt: normalizeDate(row.banned_at) as string
+  };
+}
+
 class PostgresStorage implements StorageBackend {
   private readonly pool = new Pool({
     connectionString: config.databaseUrl,
@@ -147,6 +174,16 @@ class PostgresStorage implements StorageBackend {
         ADD COLUMN IF NOT EXISTS moderated_by_username TEXT,
         ADD COLUMN IF NOT EXISTS moderated_by_first_name TEXT,
         ADD COLUMN IF NOT EXISTS moderated_at TIMESTAMPTZ
+    `);
+
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS banned_users (
+        user_id BIGINT PRIMARY KEY,
+        banned_by_user_id BIGINT NOT NULL,
+        banned_by_username TEXT,
+        banned_by_first_name TEXT,
+        banned_at TIMESTAMPTZ NOT NULL
+      )
     `);
   }
 
@@ -333,6 +370,57 @@ class PostgresStorage implements StorageBackend {
       videoCount: Number(row?.video_count ?? "0")
     };
   }
+
+  async banUser(payload: Omit<BannedUserRecord, "bannedAt">): Promise<BannedUserRecord> {
+    const record: BannedUserRecord = {
+      ...payload,
+      bannedAt: new Date().toISOString()
+    };
+
+    const result = await this.pool.query<{
+      user_id: string;
+      banned_by_user_id: string;
+      banned_by_username: string | null;
+      banned_by_first_name: string | null;
+      banned_at: Date;
+    }>(
+      `
+        INSERT INTO banned_users (
+          user_id,
+          banned_by_user_id,
+          banned_by_username,
+          banned_by_first_name,
+          banned_at
+        ) VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (user_id) DO UPDATE
+        SET
+          banned_by_user_id = EXCLUDED.banned_by_user_id,
+          banned_by_username = EXCLUDED.banned_by_username,
+          banned_by_first_name = EXCLUDED.banned_by_first_name,
+          banned_at = EXCLUDED.banned_at
+        RETURNING user_id, banned_by_user_id, banned_by_username, banned_by_first_name, banned_at
+      `,
+      [
+        String(record.userId),
+        String(record.bannedByUserId),
+        record.bannedByUsername ?? null,
+        record.bannedByFirstName ?? null,
+        record.bannedAt
+      ]
+    );
+
+    return rowToBannedUser(result.rows[0]);
+  }
+
+  async unbanUser(userId: number): Promise<boolean> {
+    const result = await this.pool.query("DELETE FROM banned_users WHERE user_id = $1", [String(userId)]);
+    return (result.rowCount ?? 0) > 0;
+  }
+
+  async isUserBanned(userId: number): Promise<boolean> {
+    const result = await this.pool.query("SELECT 1 FROM banned_users WHERE user_id = $1 LIMIT 1", [String(userId)]);
+    return (result.rowCount ?? 0) > 0;
+  }
 }
 
 class SqliteStorage implements StorageBackend {
@@ -382,6 +470,16 @@ class SqliteStorage implements StorageBackend {
     if (!hasUserPendingMessageIdColumn) {
       this.db.exec("ALTER TABLE submissions ADD COLUMN user_pending_message_id INTEGER");
     }
+
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS banned_users (
+        user_id INTEGER PRIMARY KEY,
+        banned_by_user_id INTEGER NOT NULL,
+        banned_by_username TEXT,
+        banned_by_first_name TEXT,
+        banned_at TEXT NOT NULL
+      )
+    `);
   }
 
   async createSubmission(
@@ -564,6 +662,48 @@ class SqliteStorage implements StorageBackend {
       videoCount: Number(row?.video_count ?? 0)
     };
   }
+
+  async banUser(payload: Omit<BannedUserRecord, "bannedAt">): Promise<BannedUserRecord> {
+    const record: BannedUserRecord = {
+      ...payload,
+      bannedAt: new Date().toISOString()
+    };
+
+    this.db
+      .prepare(`
+        INSERT INTO banned_users (
+          user_id,
+          banned_by_user_id,
+          banned_by_username,
+          banned_by_first_name,
+          banned_at
+        ) VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET
+          banned_by_user_id = excluded.banned_by_user_id,
+          banned_by_username = excluded.banned_by_username,
+          banned_by_first_name = excluded.banned_by_first_name,
+          banned_at = excluded.banned_at
+      `)
+      .run(
+        record.userId,
+        record.bannedByUserId,
+        record.bannedByUsername ?? null,
+        record.bannedByFirstName ?? null,
+        record.bannedAt
+      );
+
+    return record;
+  }
+
+  async unbanUser(userId: number): Promise<boolean> {
+    const result = this.db.prepare("DELETE FROM banned_users WHERE user_id = ?").run(userId);
+    return result.changes > 0;
+  }
+
+  async isUserBanned(userId: number): Promise<boolean> {
+    const row = this.db.prepare("SELECT 1 FROM banned_users WHERE user_id = ? LIMIT 1").get(userId);
+    return Boolean(row);
+  }
 }
 
 const backend: StorageBackend = config.databaseUrl
@@ -615,4 +755,19 @@ export async function updateModerationStatus(
 export async function getSubmissionStats(): Promise<SubmissionStats> {
   await ensureSchemaReady();
   return backend.getSubmissionStats();
+}
+
+export async function banUser(payload: Omit<BannedUserRecord, "bannedAt">): Promise<BannedUserRecord> {
+  await ensureSchemaReady();
+  return backend.banUser(payload);
+}
+
+export async function unbanUser(userId: number): Promise<boolean> {
+  await ensureSchemaReady();
+  return backend.unbanUser(userId);
+}
+
+export async function isUserBanned(userId: number): Promise<boolean> {
+  await ensureSchemaReady();
+  return backend.isUserBanned(userId);
 }

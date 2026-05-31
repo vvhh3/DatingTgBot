@@ -3,6 +3,7 @@ import { moderateText } from "../../moderation/filter.js";
 import {
   createSubmission,
   getSubmission,
+  isUserBanned,
   updateModerationStatus,
   updateSubmission
 } from "../../storage/index.js";
@@ -99,6 +100,15 @@ export function registerMessageHandlers(bot: Telegraf<Context>): void {
 
     // Новые пользовательские заявки принимаем только в личном чате с ботом.
     if (ctx.chat.type !== "private") {
+      return;
+    }
+
+    if (!ctx.from) {
+      return;
+    }
+
+    if (await isUserBanned(ctx.from.id)) {
+      await ctx.reply("РўС‹ РЅРµ РјРѕР¶РµС€СЊ РѕС‚РїСЂР°РІР»СЏС‚СЊ Р·Р°СЏРІРєРё: РґРѕСЃС‚СѓРї РѕРіСЂР°РЅРёС‡РµРЅ РјРѕРґРµСЂР°С‚РѕСЂРѕРј.");
       return;
     }
 

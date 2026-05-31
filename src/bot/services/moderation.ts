@@ -92,6 +92,7 @@ function buildModerationCaption(submission: SubmissionRecord): string {
     "Новая анонимная заявка",
     "",
     `ID: ${submission.id}`,
+    `Telegram ID: <code>${submission.userId}</code>`,
     `Тип заявки: ${formatContentType(submission)}`,
     `Отправитель: ${formatPerson(submission.username, submission.firstName, submission.userId)}`,
     `Статус: ${formatDecision(submission.status)}`,

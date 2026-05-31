@@ -16,7 +16,7 @@ import {
   getReferralByInvitedUserId,
   registerContestParticipant
 } from "../../storage/contest.js";
-import { getSubmissionStats } from "../../storage/index.js";
+import { banUser, getSubmissionStats, unbanUser } from "../../storage/index.js";
 import { referralSubscriptionKeyboard } from "../keyboards.js";
 import { botCommands, infoMessage, rulesMessage, welcomeCaption, welcomeDetails } from "../messages.js";
 import {
@@ -267,6 +267,25 @@ function ensureContestAdminAccess(ctx: Context): boolean {
   return Boolean(ctx.chat && isAdmin(ctx.from?.id) && isModerationChat(ctx.chat.id));
 }
 
+function ensureModerationCommandAccess(ctx: Context): boolean {
+  return Boolean(ctx.chat && isAdmin(ctx.from?.id) && isModerationChat(ctx.chat.id));
+}
+
+function parseUserIdArgument(ctx: Context): number | undefined {
+  if (!("message" in ctx.update) || !ctx.message || !("text" in ctx.message)) {
+    return undefined;
+  }
+
+  const [, rawUserId] = ctx.message.text.trim().split(/\s+/, 2);
+
+  if (!rawUserId || !/^\d+$/.test(rawUserId)) {
+    return undefined;
+  }
+
+  const userId = Number(rawUserId);
+  return Number.isSafeInteger(userId) ? userId : undefined;
+}
+
 export function registerCommandHandlers(bot: Telegraf<Context>): void {
   void Promise.all([
     bot.telegram.setMyCommands(botCommands),
@@ -491,6 +510,54 @@ export function registerCommandHandlers(bot: Telegraf<Context>): void {
     }
 
     await ctx.reply("Сохранённого черновика медиа сейчас нет.");
+  });
+
+  bot.command("ban", async (ctx) => {
+    if (!ensureModerationCommandAccess(ctx)) {
+      await ctx.reply("Эту команду можно использовать только модераторам в чате модерации.");
+      return;
+    }
+
+    const userId = parseUserIdArgument(ctx);
+
+    if (!userId) {
+      await ctx.reply("Укажи ID пользователя: /ban 123456789");
+      return;
+    }
+
+    if (!ctx.from) {
+      return;
+    }
+
+    await banUser({
+      userId,
+      bannedByUserId: ctx.from.id,
+      bannedByUsername: ctx.from.username,
+      bannedByFirstName: ctx.from.first_name
+    });
+
+    await ctx.reply(`Пользователь ${userId} забанен. Новые заявки от него не будут приниматься.`);
+  });
+
+  bot.command("unban", async (ctx) => {
+    if (!ensureModerationCommandAccess(ctx)) {
+      await ctx.reply("Эту команду можно использовать только модераторам в чате модерации.");
+      return;
+    }
+
+    const userId = parseUserIdArgument(ctx);
+
+    if (!userId) {
+      await ctx.reply("Укажи ID пользователя: /unban 123456789");
+      return;
+    }
+
+    const removed = await unbanUser(userId);
+    await ctx.reply(
+      removed
+        ? `Пользователь ${userId} разбанен.`
+        : `Пользователь ${userId} не был в бане.`
+    );
   });
 
   bot.command("stats", async (ctx) => {
