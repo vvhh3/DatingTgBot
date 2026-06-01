@@ -565,8 +565,12 @@ export function registerCommandHandlers(bot: Telegraf<Context>): void {
 
     if(removed) {
       await ctx.reply(`Пользователь ${userId} разбанен.`)
+      try{
 
-      await ctx.telegram.sendMessage(userId,"Ваш аккаунт разбанили.Теперь вы можете отправлять новые заявки")
+        await ctx.telegram.sendMessage(userId,"Ваш аккаунт разбанили.Теперь вы можете отправлять новые заявки")
+      }catch(e){
+        console.error(`Не удалось отправить сообщение пользователю ${userId}`, e);
+      }
     }else{
       await ctx.reply(`Пользователь ${userId} не был в бане.`)
     }
