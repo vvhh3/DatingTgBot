@@ -16,7 +16,7 @@ import {
   getReferralByInvitedUserId,
   registerContestParticipant
 } from "../../storage/contest.js";
-import { banUser, getSubmissionStats, unbanUser } from "../../storage/index.js";
+import { banUser, getBannedUsers, getSubmissionStats, unbanUser } from "../../storage/index.js";
 import { referralSubscriptionKeyboard } from "../keyboards.js";
 import { botCommands, infoMessage, rulesMessage, welcomeCaption, welcomeDetails } from "../messages.js";
 import {
@@ -535,7 +535,7 @@ export function registerCommandHandlers(bot: Telegraf<Context>): void {
       bannedByUsername: ctx.from.username,
       bannedByFirstName: ctx.from.first_name
     });
-    
+
     try {
       await ctx.telegram.sendMessage(
         userId,
@@ -563,23 +563,50 @@ export function registerCommandHandlers(bot: Telegraf<Context>): void {
 
     const removed = await unbanUser(userId);
 
-    if(removed) {
+    if (removed) {
       await ctx.reply(`Пользователь ${userId} разбанен.`)
-      try{
+      try {
 
-        await ctx.telegram.sendMessage(userId,"Ваш аккаунт разбанили.Теперь вы можете отправлять новые заявки")
-      }catch(e){
+        await ctx.telegram.sendMessage(userId, "Ваш аккаунт разбанили.Теперь вы можете отправлять новые заявки")
+      } catch (e) {
         console.error(`Не удалось отправить сообщение пользователю ${userId}`, e);
       }
-    }else{
+    } else {
       await ctx.reply(`Пользователь ${userId} не был в бане.`)
     }
-    
+
     // await ctx.reply(
     //   removed
     //     ? `Пользователь ${userId} разбанен.`
     //     : `Пользователь ${userId} не был в бане.`
     // );
+  });
+  bot.command("banned", async (ctx) => {
+    if (!ensureModerationCommandAccess(ctx)) {
+      await ctx.reply("Эту команду можно использовать только модераторам в чате модерации.")
+      return
+    }
+
+    try {
+      const bannedUsers = await getBannedUsers();
+
+      if (bannedUsers.length === 0) {
+        await ctx.reply("Нет забаненных пользователей.");
+        return;
+      }
+
+      const text = bannedUsers.map((user) =>
+            `👤 ${user.userId}\n` +
+            `🚫 Забанил: ${user.bannedByUserId}\n` +
+            `📅 ${new Date(user.bannedAt).toLocaleString()}`
+        )
+        .join("\n\n");
+
+      await ctx.reply(`Забаненные пользователи:\n\n${text}`);
+    } catch (e) {
+      console.error("Failed to fetch banned users.", e);
+      await ctx.reply("Не удалось получить список забаненных пользователей.");
+    }
   });
 
   bot.command("stats", async (ctx) => {

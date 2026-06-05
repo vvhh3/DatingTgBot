@@ -47,14 +47,15 @@ export type BannedUserRecord = {
 };
 
 type StorageBackend = {
-  initialize(): Promise<void>;
-  createSubmission(payload: Omit<SubmissionRecord, "id" | "createdAt" | "status">): Promise<SubmissionRecord>;
-  getSubmission(id: string): Promise<SubmissionRecord | undefined>;
-  updateSubmission(id: string, updates: Partial<SubmissionRecord>): Promise<SubmissionRecord | undefined>;
-  getSubmissionStats(): Promise<SubmissionStats>;
-  banUser(payload: Omit<BannedUserRecord, "bannedAt">): Promise<BannedUserRecord>;
-  unbanUser(userId: number): Promise<boolean>;
-  isUserBanned(userId: number): Promise<boolean>;
+  initialize(): Promise<void>
+  createSubmission(payload: Omit<SubmissionRecord, "id" | "createdAt" | "status">): Promise<SubmissionRecord>
+  getSubmission(id: string): Promise<SubmissionRecord | undefined>
+  updateSubmission(id: string, updates: Partial<SubmissionRecord>): Promise<SubmissionRecord | undefined>
+  getSubmissionStats(): Promise<SubmissionStats>
+  banUser(payload: Omit<BannedUserRecord, "bannedAt">): Promise<BannedUserRecord>
+  unbanUser(userId: number): Promise<boolean>
+  isUserBanned(userId: number): Promise<boolean>
+  getBannedUsers(): Promise<BannedUserRecord[]>
 };
 
 function normalizeDate(value: string | Date | null | undefined): string | undefined {
@@ -421,6 +422,20 @@ class PostgresStorage implements StorageBackend {
     const result = await this.pool.query("SELECT 1 FROM banned_users WHERE user_id = $1 LIMIT 1", [String(userId)]);
     return (result.rowCount ?? 0) > 0;
   }
+  async getBannedUsers(): Promise<BannedUserRecord[]> {
+    const result = await this.pool.query(`
+    SELECT
+      user_id,
+      banned_by_user_id,
+      banned_by_username,
+      banned_by_first_name,
+      banned_at
+    FROM banned_users
+    ORDER BY banned_at DESC
+  `);
+
+    return result.rows.map(row => rowToBannedUser(row));
+  }
 }
 
 class SqliteStorage implements StorageBackend {
@@ -639,16 +654,16 @@ class SqliteStorage implements StorageBackend {
         FROM submissions
       `)
       .get() as
-        | {
-          total: number | null;
-          pending: number | null;
-          approved: number | null;
-          rejected: number | null;
-          cancelled: number | null;
-          text_count: number | null;
-          photo_count: number | null;
-          video_count: number | null;
-        }
+      | {
+        total: number | null;
+        pending: number | null;
+        approved: number | null;
+        rejected: number | null;
+        cancelled: number | null;
+        text_count: number | null;
+        photo_count: number | null;
+        video_count: number | null;
+      }
       | undefined;
 
     return {
@@ -703,6 +718,29 @@ class SqliteStorage implements StorageBackend {
   async isUserBanned(userId: number): Promise<boolean> {
     const row = this.db.prepare("SELECT 1 FROM banned_users WHERE user_id = ? LIMIT 1").get(userId);
     return Boolean(row);
+  }
+  
+  async getBannedUsers(): Promise<BannedUserRecord[]> {
+    const rows = this.db
+      .prepare(`
+      SELECT
+        user_id,
+        banned_by_user_id,
+        banned_by_username,
+        banned_by_first_name,
+        banned_at
+      FROM banned_users
+      ORDER BY banned_at DESC
+    `)
+      .all() as {
+        user_id: number;
+        banned_by_user_id: number;
+        banned_by_username: string | null;
+        banned_by_first_name: string | null;
+        banned_at: string;
+      }[];
+
+    return rows.map(row => rowToBannedUser(row));
   }
 }
 
@@ -770,4 +808,9 @@ export async function unbanUser(userId: number): Promise<boolean> {
 export async function isUserBanned(userId: number): Promise<boolean> {
   await ensureSchemaReady();
   return backend.isUserBanned(userId);
+}
+
+export async function getBannedUsers(): Promise<BannedUserRecord[]> {
+  await ensureSchemaReady();
+  return backend.getBannedUsers();
 }
