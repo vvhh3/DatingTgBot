@@ -575,12 +575,8 @@ export function registerCommandHandlers(bot: Telegraf<Context>): void {
       await ctx.reply(`Пользователь ${userId} не был в бане.`)
     }
 
-    // await ctx.reply(
-    //   removed
-    //     ? `Пользователь ${userId} разбанен.`
-    //     : `Пользователь ${userId} не был в бане.`
-    // );
   });
+
   bot.command("banned", async (ctx) => {
     if (!ensureModerationCommandAccess(ctx)) {
       await ctx.reply("Эту команду можно использовать только модераторам в чате модерации.")
@@ -596,8 +592,8 @@ export function registerCommandHandlers(bot: Telegraf<Context>): void {
       }
 
       const text = bannedUsers.map((user) =>
-            `👤 ${user.userId}\n` +
-            `🚫 Забанил: ${user.bannedByUserId}\n` +
+            `👤 ${user.userId} • <a href="tg://user?id=${user.userId}">${user.userId}</a>\n` +
+            `🚫 Забанил: ${user.bannedByUserId} • <a href="tg://user?id=${user.bannedByUserId}">${user.bannedByUserId}</a>\n` +
             `📅 ${new Date(user.bannedAt).toLocaleString()}`
         )
         .join("\n\n");
