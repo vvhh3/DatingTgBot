@@ -195,6 +195,12 @@ class PostgresStorage implements StorageBackend {
         banned_at TIMESTAMPTZ NOT NULL
       )
     `);
+
+    await this.pool.query(`
+      ALTER TABLE banned_users
+        ADD COLUMN IF NOT EXISTS username TEXT,
+        ADD COLUMN IF NOT EXISTS first_name TEXT
+    `);
   }
 
   async createSubmission(
@@ -525,6 +531,32 @@ class SqliteStorage implements StorageBackend {
 
     if (!hasUserPendingMessageIdColumn) {
       this.db.exec("ALTER TABLE submissions ADD COLUMN user_pending_message_id INTEGER");
+    }
+
+    const hasBannedUsersUsernameColumn = this.db
+      .prepare(`
+        SELECT 1
+        FROM pragma_table_info('banned_users')
+        WHERE name = ?
+        LIMIT 1
+      `)
+      .get("username");
+
+    if (!hasBannedUsersUsernameColumn) {
+      this.db.exec("ALTER TABLE banned_users ADD COLUMN username TEXT");
+    }
+
+    const hasBannedUsersFirstNameColumn = this.db
+      .prepare(`
+        SELECT 1
+        FROM pragma_table_info('banned_users')
+        WHERE name = ?
+        LIMIT 1
+      `)
+      .get("first_name");
+
+    if (!hasBannedUsersFirstNameColumn) {
+      this.db.exec("ALTER TABLE banned_users ADD COLUMN first_name TEXT");
     }
 
     this.db.exec(`
