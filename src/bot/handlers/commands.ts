@@ -16,7 +16,7 @@ import {
   getReferralByInvitedUserId,
   registerContestParticipant
 } from "../../storage/contest.js";
-import { banUser, getBannedUsers, getSubmissionStats, unbanUser } from "../../storage/index.js";
+import { banUser, getBannedUsers, getSubmissionStats, getUserInfo, unbanUser } from "../../storage/index.js";
 import { referralSubscriptionKeyboard } from "../keyboards.js";
 import { botCommands, infoMessage, rulesMessage, welcomeCaption, welcomeDetails } from "../messages.js";
 import {
@@ -528,11 +528,12 @@ export function registerCommandHandlers(bot: Telegraf<Context>): void {
     if (!ctx.from) {
       return;
     }
+    const user = await getUserInfo(userId);
 
     await banUser({
       userId,
-      // user_name: target.username,
-      // first_name: target.first_name,
+      username: user?.username,
+      firstName: user?.firstName,
       bannedByUserId: ctx.from.id,
       bannedByUsername: ctx.from.username,
       bannedByFirstName: ctx.from.first_name
@@ -595,6 +596,7 @@ export function registerCommandHandlers(bot: Telegraf<Context>): void {
 
       const text = bannedUsers.map((user) =>
             `👤 ${user.userId} • <a href="tg://user?id=${user.userId}">ссылка</a>\n` +
+            `😶‍🌫️ <a href="tg://user?id=${user.userId}">ссылка по id</a> || <a href="https://t.me/${user.username}">ссылка по username</a>\n` +
             `🚫 Забанил: ${user.bannedByUserId} • <a href="tg://user?id=${user.bannedByUserId}">ссылка</a>\n` +
             `📅 ${new Date(user.bannedAt).toLocaleString("ru-RU",{
               day: "2-digit",

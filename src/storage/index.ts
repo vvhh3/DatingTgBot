@@ -40,6 +40,8 @@ type SubmissionStats = {
 
 export type BannedUserRecord = {
   userId: number;
+  username?: string;
+  firstName?: string;
   bannedByUserId: number;
   bannedByUsername?: string;
   bannedByFirstName?: string;
@@ -121,6 +123,8 @@ function buildNewSubmissionRecord(
 
 function rowToBannedUser(row: {
   user_id: number | string;
+  username?: string| null;
+  first_name?: string| null;
   banned_by_user_id: number | string;
   banned_by_username: string | null;
   banned_by_first_name: string | null;
@@ -128,6 +132,8 @@ function rowToBannedUser(row: {
 }): BannedUserRecord {
   return {
     userId: normalizeBigInt(row.user_id) as number,
+    username: row.username ?? undefined,
+    firstName: row.first_name ?? undefined,
     bannedByUserId: normalizeBigInt(row.banned_by_user_id) as number,
     bannedByUsername: row.banned_by_username ?? undefined,
     bannedByFirstName: row.banned_by_first_name ?? undefined,
@@ -381,6 +387,8 @@ class PostgresStorage implements StorageBackend {
 
     const result = await this.pool.query<{
       user_id: string;
+      username?: string;
+      firstName?: string;
       banned_by_user_id: string;
       banned_by_username: string | null;
       banned_by_first_name: string | null;
@@ -389,13 +397,17 @@ class PostgresStorage implements StorageBackend {
       `
         INSERT INTO banned_users (
           user_id,
+          username,
+          first_name,
           banned_by_user_id,
           banned_by_username,
           banned_by_first_name,
           banned_at
-        ) VALUES ($1, $2, $3, $4, $5)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
         ON CONFLICT (user_id) DO UPDATE
         SET
+          username = EXCLUDED.username,
+          first_name = EXCLUDED.first_name,
           banned_by_user_id = EXCLUDED.banned_by_user_id,
           banned_by_username = EXCLUDED.banned_by_username,
           banned_by_first_name = EXCLUDED.banned_by_first_name,
@@ -404,6 +416,9 @@ class PostgresStorage implements StorageBackend {
       `,
       [
         String(record.userId),
+        record.username ?? null,
+        record.firstName ?? null,
+        String(record.bannedByUserId),
         String(record.bannedByUserId),
         record.bannedByUsername ?? null,
         record.bannedByFirstName ?? null,
@@ -428,6 +443,8 @@ class PostgresStorage implements StorageBackend {
     const result = await this.pool.query(`
     SELECT
       user_id,
+      username,
+      first_name,
       banned_by_user_id,
       banned_by_username,
       banned_by_first_name,
@@ -710,6 +727,8 @@ class SqliteStorage implements StorageBackend {
       .prepare(`
         INSERT INTO banned_users (
           user_id,
+          username,
+          first_name,
           banned_by_user_id,
           banned_by_username,
           banned_by_first_name,
@@ -723,6 +742,8 @@ class SqliteStorage implements StorageBackend {
       `)
       .run(
         record.userId,
+        record.username ?? null,
+        record.firstName ?? null,
         record.bannedByUserId,
         record.bannedByUsername ?? null,
         record.bannedByFirstName ?? null,
@@ -747,6 +768,8 @@ class SqliteStorage implements StorageBackend {
       .prepare(`
       SELECT
         user_id,
+        username,
+        first_name,
         banned_by_user_id,
         banned_by_username,
         banned_by_first_name,
@@ -756,6 +779,8 @@ class SqliteStorage implements StorageBackend {
     `)
       .all() as {
         user_id: number;
+        username: string | null;
+        first_name: string | null;
         banned_by_user_id: number;
         banned_by_username: string | null;
         banned_by_first_name: string | null;
