@@ -187,6 +187,8 @@ class PostgresStorage implements StorageBackend {
     await this.pool.query(`
       CREATE TABLE IF NOT EXISTS banned_users (
         user_id BIGINT PRIMARY KEY,
+        username TEXT,
+        first_name TEXT,
         banned_by_user_id BIGINT NOT NULL,
         banned_by_username TEXT,
         banned_by_first_name TEXT,
@@ -528,6 +530,8 @@ class SqliteStorage implements StorageBackend {
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS banned_users (
         user_id INTEGER PRIMARY KEY,
+        username TEXT,
+        first_name TEXT,
         banned_by_user_id INTEGER NOT NULL,
         banned_by_username TEXT,
         banned_by_first_name TEXT,
@@ -733,7 +737,7 @@ class SqliteStorage implements StorageBackend {
           banned_by_username,
           banned_by_first_name,
           banned_at
-        ) VALUES (?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(user_id) DO UPDATE SET
           banned_by_user_id = excluded.banned_by_user_id,
           banned_by_username = excluded.banned_by_username,

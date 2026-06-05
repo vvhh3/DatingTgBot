@@ -94,7 +94,7 @@ function buildModerationCaption(submission: SubmissionRecord): string {
     `ID: ${submission.id}`,
     `ID челика: <code>${submission.userId}</code>`,
     `Тип заявки: ${formatContentType(submission)}`,
-    `Отправитель: ${formatPerson(submission.username, submission.firstName, submission.userId)} <a href="tg://user?id=${submission.userId}">ссылка по id</a> || <a href="https://t.me/${submission.username}">ссылка по username</a>`,
+    `Отправитель: ${formatPerson(submission.username, submission.firstName, submission.userId)} || <a href="tg://user?id=${submission.userId}">ссылка по id</a> || <a href="https://t.me/${submission.username}">ссылка по username</a>`,
     `Статус: ${formatDecision(submission.status)}`,
     `Решение принял: ${formatModerator(submission)}`,
     submission.moderatedAt ? `Время решения: ${escapeHtml(formatDateTime(submission.moderatedAt))}` : "",
