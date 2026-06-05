@@ -531,6 +531,8 @@ export function registerCommandHandlers(bot: Telegraf<Context>): void {
 
     await banUser({
       userId,
+      // user_name: target.username,
+      // first_name: target.first_name,
       bannedByUserId: ctx.from.id,
       bannedByUsername: ctx.from.username,
       bannedByFirstName: ctx.from.first_name
@@ -592,8 +594,8 @@ export function registerCommandHandlers(bot: Telegraf<Context>): void {
       }
 
       const text = bannedUsers.map((user) =>
-            `👤 ${user.userId} • <a href="tg://user?id=${user.userId}">${user.userId}</a>\n` +
-            `🚫 Забанил: ${user.bannedByUserId} • <a href="tg://user?id=${user.bannedByUserId}">${user.bannedByUserId}</a>\n` +
+            `👤 ${user.userId} • <a href="tg://user?id=${user.userId}">ссылка</a>\n` +
+            `🚫 Забанил: ${user.bannedByUserId} • <a href="tg://user?id=${user.bannedByUserId}">ссылка</a>\n` +
             `📅 ${new Date(user.bannedAt).toLocaleString("ru-RU",{
               day: "2-digit",
               month: "2-digit",

@@ -56,6 +56,7 @@ type StorageBackend = {
   unbanUser(userId: number): Promise<boolean>
   isUserBanned(userId: number): Promise<boolean>
   getBannedUsers(): Promise<BannedUserRecord[]>
+  getUserInfo(userId: number): Promise<{ userId: number; username?: string; firstName?: string; } | undefined>;
 };
 
 function normalizeDate(value: string | Date | null | undefined): string | undefined {
@@ -422,6 +423,7 @@ class PostgresStorage implements StorageBackend {
     const result = await this.pool.query("SELECT 1 FROM banned_users WHERE user_id = $1 LIMIT 1", [String(userId)]);
     return (result.rowCount ?? 0) > 0;
   }
+
   async getBannedUsers(): Promise<BannedUserRecord[]> {
     const result = await this.pool.query(`
     SELECT
@@ -435,6 +437,26 @@ class PostgresStorage implements StorageBackend {
   `);
 
     return result.rows.map(row => rowToBannedUser(row));
+  }
+  async getUserInfo(userId: number) {
+    const result = await this.pool.query(
+      `
+    SELECT user_id, username, first_name
+    FROM submissions
+    WHERE user_id = $1
+    LIMIT 1
+    `,
+      [String(userId)]
+    );
+
+    const row = result.rows[0];
+    if (!row) return undefined;
+
+    return {
+      userId: Number(row.user_id),
+      username: row.username ?? undefined,
+      firstName: row.first_name ?? undefined
+    };
   }
 }
 
@@ -719,7 +741,7 @@ class SqliteStorage implements StorageBackend {
     const row = this.db.prepare("SELECT 1 FROM banned_users WHERE user_id = ? LIMIT 1").get(userId);
     return Boolean(row);
   }
-  
+
   async getBannedUsers(): Promise<BannedUserRecord[]> {
     const rows = this.db
       .prepare(`
@@ -741,6 +763,22 @@ class SqliteStorage implements StorageBackend {
       }[];
 
     return rows.map(row => rowToBannedUser(row));
+  }
+  async getUserInfo(userId: number) {
+    const row = this.db.prepare(`
+    SELECT user_id, username, first_name
+    FROM submissions
+    WHERE user_id = ?
+    LIMIT 1
+  `).get(userId) as any;
+
+    if (!row) return undefined;
+
+    return {
+      userId: row.user_id,
+      username: row.username ?? undefined,
+      firstName: row.first_name ?? undefined
+    };
   }
 }
 
@@ -813,4 +851,9 @@ export async function isUserBanned(userId: number): Promise<boolean> {
 export async function getBannedUsers(): Promise<BannedUserRecord[]> {
   await ensureSchemaReady();
   return backend.getBannedUsers();
+}
+
+export async function getUserInfo(userId: number) {
+  await ensureSchemaReady();
+  return backend.getUserInfo(userId);
 }
