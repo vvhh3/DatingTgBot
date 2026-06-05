@@ -598,7 +598,9 @@ export function registerCommandHandlers(bot: Telegraf<Context>): void {
         )
         .join("\n\n");
 
-      await ctx.reply(`Забаненные пользователи:\n\n${text}`);
+      await ctx.reply(`Забаненные пользователи:\n\n${text}` , 
+        { parse_mode: "HTML" }
+      );
     } catch (e) {
       console.error("Failed to fetch banned users.", e);
       await ctx.reply("Не удалось получить список забаненных пользователей.");
