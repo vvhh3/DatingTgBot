@@ -596,7 +596,7 @@ export function registerCommandHandlers(bot: Telegraf<Context>): void {
 
       const text = bannedUsers.map((user) =>
             `👤 ${user.userId} • <a href="tg://user?id=${user.userId}">ссылка</a>\n` +
-            `😶‍🌫️ <a href="tg://user?id=${user.userId}">ссылка по id</a> || <a href="https://t.me/${user.username}">ссылка по username</a>\n` +
+            `😶‍🌫️ <a href="https://t.me/${user.username}">ссылка по username</a>\n` +
             `🚫 Забанил: ${user.bannedByUserId} • <a href="tg://user?id=${user.bannedByUserId}">ссылка</a>\n` +
             `📅 ${new Date(user.bannedAt).toLocaleString("ru-RU",{
               day: "2-digit",
