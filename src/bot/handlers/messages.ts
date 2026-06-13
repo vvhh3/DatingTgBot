@@ -169,7 +169,7 @@ export function registerMessageHandlers(bot: Telegraf<Context>): void {
         return;
       }
 
-      await ctx.reply("В твоём сообщении присутствуют запрещённые слова, выражения или ссылки. Измени текст и отправь ещё раз.");
+      await ctx.reply("В твоём сообщении присутствуют запрещённые слова, выражения 🤬. Измени текст и отправь ещё раз...");
       return;
     }
 
