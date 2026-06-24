@@ -6,6 +6,7 @@ import { registerCoreHandlers } from "./handlers/core.js";
 import { registerMessageHandlers } from "./handlers/messages.js";
 import { registerModerationActionHandlers } from "./handlers/moderation-actions.js";
 import { registerReferralActionHandlers } from "./handlers/referral-actions.js";
+import { scheduleMorningMotivation } from "./services/ai-scheduler.js";
 
 const bot = new Telegraf<Context>(config.botToken);
 
@@ -18,6 +19,7 @@ registerCommandHandlers(bot);
 registerModerationActionHandlers(bot);
 registerReferralActionHandlers(bot);
 registerMessageHandlers(bot);
+scheduleMorningMotivation(bot);
 
 bot.launch();
 

@@ -122,5 +122,8 @@ export const config = {
   contestChannelUrl: optionalEnv("CONTEST_CHANNEL_URL"),
   adminUserIds: parseAdminIds(process.env.ADMIN_USER_IDS),
   displayTimeZone: parseTimeZone(process.env.DISPLAY_TIMEZONE),
-  submissionCooldownSeconds: parseCooldownSeconds(process.env.SUBMISSION_COOLDOWN_SECONDS)
+  submissionCooldownSeconds: parseCooldownSeconds(process.env.SUBMISSION_COOLDOWN_SECONDS),
+  openModelApiKey: requireEnv("OPENMODEL_API_KEY"),
+  aiBaseUrl: requireEnv("BASE_URL"),
+  aiModel: requireEnv("AI_MODEL")
 };

@@ -19,6 +19,7 @@ import {
 import { banUser, getBannedUsers, getSubmissionStats, getUserInfo, unbanUser } from "../../storage/index.js";
 import { referralSubscriptionKeyboard } from "../keyboards.js";
 import { botCommands, infoMessage, rulesMessage, welcomeCaption, welcomeDetails } from "../messages.js";
+import { askAi } from "../services/ai.js";
 import {
   buildReferralLink,
   extractStartPayload,
@@ -284,6 +285,23 @@ function parseUserIdArgument(ctx: Context): number | undefined {
 
   const userId = Number(rawUserId);
   return Number.isSafeInteger(userId) ? userId : undefined;
+}
+
+function parseCommandTextArgument(ctx: Context): string | undefined {
+  if (!("message" in ctx.update) || !ctx.message || !("text" in ctx.message)) {
+    return undefined;
+  }
+
+  const text = ctx.message.text.replace(/^\/\S+\s*/, "").trim();
+  return text || undefined;
+}
+
+async function replyInTelegramChunks(ctx: Context, text: string): Promise<void> {
+  const maxLength = 3900;
+
+  for (let index = 0; index < text.length; index += maxLength) {
+    await ctx.reply(text.slice(index, index + maxLength));
+  }
 }
 
 export function registerCommandHandlers(bot: Telegraf<Context>): void {
@@ -612,6 +630,29 @@ export function registerCommandHandlers(bot: Telegraf<Context>): void {
     } catch (e) {
       console.error("Failed to fetch banned users.", e);
       await ctx.reply("Не удалось получить список забаненных пользователей.");
+    }
+  });
+
+  bot.command("ai", async (ctx) => {
+    if (!isAdmin(ctx.from?.id)) {
+      await ctx.reply("Недостаточно прав.");
+      return;
+    }
+
+    const prompt = parseCommandTextArgument(ctx);
+
+    if (!prompt) {
+      await ctx.reply("Напиши запрос после команды: /ai придумай текст поста");
+      return;
+    }
+
+    try {
+      await ctx.sendChatAction("typing");
+      const answer = await askAi(prompt);
+      await replyInTelegramChunks(ctx, answer);
+    } catch (error) {
+      console.error("Failed to process AI request.", error);
+      await ctx.reply("AI сейчас не смог ответить. Проверь ключ, BASE_URL и модель.");
     }
   });
 
