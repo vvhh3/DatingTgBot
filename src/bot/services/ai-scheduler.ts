@@ -2,8 +2,8 @@ import type { Context, Telegraf } from "telegraf";
 import { config } from "../../config/index.js";
 import { createMorningMotivation } from "./ai.js";
 
-const MORNING_HOUR = 11;
-const MORNING_MINUTE =34;
+const MORNING_HOUR = 10;
+const MORNING_MINUTE =0;
 const CHECK_INTERVAL_MS = 60_000;
 
 function getLocalDateTimeParts(date: Date, timeZone: string): {
