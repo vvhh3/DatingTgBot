@@ -560,8 +560,7 @@ export function registerCommandHandlers(bot: Telegraf<Context>): void {
     try {
       await ctx.telegram.sendMessage(
         userId,
-        "Ваш аккаунт был заблокирован. Новые заявки от вас больше не принимаются."
-      );
+        "Ваш аккаунт был заблокирован, у вас -аура. Новые заявки от вас больше не принимаются.🙃")
     } catch (error) {
       console.error(`Не удалось отправить сообщение пользователю ${userId}`, error);
     }
