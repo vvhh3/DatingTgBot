@@ -19,7 +19,7 @@ export function registerModerationActionHandlers(bot: Telegraf<Context>): void {
 
       try {
         await ctx.editMessageReplyMarkup(undefined);
-      } catch {}
+      } catch { }
 
       return;
     }
@@ -34,7 +34,7 @@ export function registerModerationActionHandlers(bot: Telegraf<Context>): void {
 
       try {
         await ctx.editMessageReplyMarkup(undefined);
-      } catch {}
+      } catch { }
 
       return;
     }
@@ -241,8 +241,21 @@ export function registerModerationActionHandlers(bot: Telegraf<Context>): void {
     try {
       await ctx.telegram.sendMessage(
         submission.userId,
-        "Твоё анонимное сообщение прошло модерацию и было опубликовано.❤️"
-      );
+        "❤️ Твоё анонимное сообщение прошло модерацию и было опубликовано!\n\nЕсли бот оказался полезным, можешь поддержать разработчика 😊",
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [
+                {
+                  text: "💖 Поддержать разработчика",
+                  url: "https://dalink.to/vvhh3",
+                },
+              ],
+            ],
+          },
+        }
+      )
+      
     } catch (error) {
       console.warn("Не удалось отправить авто-уведомление пользователю после одобрения:", error);
     }
