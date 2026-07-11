@@ -255,7 +255,6 @@ export function registerModerationActionHandlers(bot: Telegraf<Context>): void {
           },
         }
       )
-      
     } catch (error) {
       console.warn("Не удалось отправить авто-уведомление пользователю после одобрения:", error);
     }
