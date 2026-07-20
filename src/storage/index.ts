@@ -4,7 +4,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { Pool } from "pg";
 import { config } from "../config/index.js";
-import type { ModerationStatus, SubmissionContentType, SubmissionRecord } from "../shared/types.js";
+import type { ModerationStatus, SubmissionContentType, SubmissionRecord, UserRecord } from "../shared/types.js";
 
 type SubmissionRow = {
   id: string;
@@ -59,6 +59,7 @@ type StorageBackend = {
   isUserBanned(userId: number): Promise<boolean>
   getBannedUsers(): Promise<BannedUserRecord[]>
   getUserInfo(userId: number): Promise<{ userId: number; username?: string; firstName?: string; } | undefined>;
+  getAllUsers(): Promise<UserRecord[]>;
 };
 
 function normalizeDate(value: string | Date | null | undefined): string | undefined {
@@ -483,6 +484,47 @@ class PostgresStorage implements StorageBackend {
       firstName: row.first_name ?? undefined
     };
   }
+
+  async getAllUsers(): Promise<UserRecord[]> {
+    const result = await this.pool.query(`
+      SELECT
+        s.user_id,
+        s.username,
+        s.first_name,
+        MAX(s.created_at) AS last_submission_at,
+        COUNT(*)::integer AS submissions_count,
+        CASE WHEN b.user_id IS NOT NULL THEN true ELSE false END AS is_banned,
+        b.banned_at
+      FROM submissions s
+      LEFT JOIN banned_users b ON s.user_id = b.user_id
+      GROUP BY s.user_id, s.username, s.first_name, b.user_id, b.banned_at
+
+      UNION ALL
+
+      SELECT
+        b.user_id,
+        b.username,
+        b.first_name,
+        NULL AS last_submission_at,
+        0 AS submissions_count,
+        true AS is_banned,
+        b.banned_at
+      FROM banned_users b
+      WHERE NOT EXISTS (SELECT 1 FROM submissions s WHERE s.user_id = b.user_id)
+
+      ORDER BY last_submission_at DESC NULLS LAST
+    `);
+
+    return result.rows.map(row => ({
+      userId: Number(row.user_id),
+      username: row.username ?? undefined,
+      firstName: row.first_name ?? undefined,
+      lastSubmissionAt: row.last_submission_at ?? undefined,
+      submissionsCount: Number(row.submissions_count),
+      isBanned: Boolean(row.is_banned),
+      bannedAt: row.banned_at ?? undefined
+    }));
+  }
 }
 
 class SqliteStorage implements StorageBackend {
@@ -841,6 +883,55 @@ class SqliteStorage implements StorageBackend {
       firstName: row.first_name ?? undefined
     };
   }
+
+  async getAllUsers(): Promise<UserRecord[]> {
+    const rows = this.db.prepare(`
+      SELECT
+        s.user_id,
+        s.username,
+        s.first_name,
+        MAX(s.created_at) AS last_submission_at,
+        COUNT(*) AS submissions_count,
+        CASE WHEN b.user_id IS NOT NULL THEN 1 ELSE 0 END AS is_banned,
+        b.banned_at
+      FROM submissions s
+      LEFT JOIN banned_users b ON s.user_id = b.user_id
+      GROUP BY s.user_id, s.username, s.first_name, b.user_id, b.banned_at
+
+      UNION ALL
+
+      SELECT
+        b.user_id,
+        b.username,
+        b.first_name,
+        NULL AS last_submission_at,
+        0 AS submissions_count,
+        1 AS is_banned,
+        b.banned_at
+      FROM banned_users b
+      WHERE NOT EXISTS (SELECT 1 FROM submissions s WHERE s.user_id = b.user_id)
+
+      ORDER BY last_submission_at DESC
+    `).all() as Array<{
+      user_id: number;
+      username: string | null;
+      first_name: string | null;
+      last_submission_at: string | null;
+      submissions_count: number;
+      is_banned: number;
+      banned_at: string | null;
+    }>;
+
+    return rows.map(row => ({
+      userId: row.user_id,
+      username: row.username ?? undefined,
+      firstName: row.first_name ?? undefined,
+      lastSubmissionAt: row.last_submission_at ?? undefined,
+      submissionsCount: row.submissions_count,
+      isBanned: row.is_banned === 1,
+      bannedAt: row.banned_at ?? undefined
+    }));
+  }
 }
 
 const backend: StorageBackend = config.databaseUrl
@@ -917,4 +1008,9 @@ export async function getBannedUsers(): Promise<BannedUserRecord[]> {
 export async function getUserInfo(userId: number) {
   await ensureSchemaReady();
   return backend.getUserInfo(userId);
+}
+
+export async function getAllUsers(): Promise<UserRecord[]> {
+  await ensureSchemaReady();
+  return backend.getAllUsers();
 }

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Пользователи</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font: 14px/1.5 sans-serif; margin: 0; padding: 1rem; background: #f0f2f5; }
+  .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
+  h1 { margin: 0; font-size: 1.3rem; }
+  a.logout { color: #666; text-decoration: none; font-size: .85rem; }
+  a.logout:hover { text-decoration: underline; }
+  table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+  th, td { padding: .6rem .75rem; text-align: left; border-bottom: 1px solid #eee; }
+  th { background: #f7f7f7; font-weight: 600; font-size: .8rem; text-transform: uppercase; color: #555; }
+  tr:hover { background: #fafafa; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: .75rem; font-weight: 600; }
+  .badge-banned { background: #ffebee; color: #c62828; }
+  .badge-active { background: #e8f5e9; color: #2e7d32; }
+  .btn { display: inline-block; padding: .35rem .75rem; border: none; border-radius: 4px; font-size: .8rem; cursor: pointer; text-decoration: none; color: #fff; }
+  .btn-ban { background: #d32f2f; }
+  .btn-ban:hover { background: #b71c1c; }
+  .btn-unban { background: #388e3c; }
+  .btn-unban:hover { background: #1b5e20; }
+  .empty { text-align: center; padding: 3rem 1rem; color: #888; }
+  .count { font-size: .85rem; color: #666; margin-bottom: .75rem; }
+</style>
+</head>
+<body>
+  <div class="header">
+    <h1>Пользователи</h1>
+    <a href="/logout" class="logout">Выйти</a>
+  </div>
+
+  <div class="count">Всего: <%= users.length %></div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Имя</th>
+        <th>Username</th>
+        <th>Постов</th>
+        <th>Последний пост</th>
+        <th>Статус</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <% if (users.length === 0) { %>
+        <tr><td colspan="7" class="empty">Пока нет пользователей</td></tr>
+      <% } %>
+      <% users.forEach(u => { %>
+        <tr>
+          <td><%= u.userId %></td>
+          <td><%= u.firstName || '—' %></td>
+          <td><%= u.username ? '@' + u.username : '—' %></td>
+          <td><%= u.submissionsCount %></td>
+          <td><%= u.lastSubmissionAt ? new Date(u.lastSubmissionAt).toLocaleString() : '—' %></td>
+          <td>
+            <% if (u.isBanned) { %>
+              <span class="badge badge-banned">Забанен</span>
+            <% } else { %>
+              <span class="badge badge-active">Активен</span>
+            <% } %>
+          </td>
+          <td>
+            <% if (u.isBanned) { %>
+              <form method="post" action="/unban/<%= u.userId %>" style="display:inline">
+                <button class="btn btn-unban">Разбанить</button>
+              </form>
+            <% } else { %>
+              <form method="post" action="/ban/<%= u.userId %>" style="display:inline">
+                <button class="btn btn-ban">Забанить</button>
+              </form>
+            <% } %>
+          </td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</body>
+</html>

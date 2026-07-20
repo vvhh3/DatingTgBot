@@ -125,5 +125,7 @@ export const config = {
   submissionCooldownSeconds: parseCooldownSeconds(process.env.SUBMISSION_COOLDOWN_SECONDS),
   openModelApiKey: requireEnv("OPENMODEL_API_KEY"),
   aiBaseUrl: requireEnv("BASE_URL"),
-  aiModel: requireEnv("AI_MODEL")
+  aiModel: requireEnv("AI_MODEL"),
+  adminPassword: optionalEnv("ADMIN_PASSWORD"),
+  port: Number(optionalEnv("PORT") || "3000")
 };

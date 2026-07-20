@@ -26,3 +26,13 @@ export interface FilterResult {
   allowed: boolean;
   reasons: string[];
 }
+
+export interface UserRecord {
+  userId: number;
+  username?: string;
+  firstName?: string;
+  lastSubmissionAt?: string;
+  submissionsCount: number;
+  isBanned: boolean;
+  bannedAt?: string;
+}
