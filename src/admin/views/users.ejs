@@ -23,6 +23,11 @@
   .btn-ban:hover { background: #b71c1c; }
   .btn-unban { background: #388e3c; }
   .btn-unban:hover { background: #1b5e20; }
+  .search { display: flex; gap: .5rem; margin-bottom: .75rem; align-items: center; }
+  .search input { flex: 1; padding: .5rem .75rem; border: 1px solid #ccc; border-radius: 4px; font-size: .9rem; }
+  .search button { padding: .5rem 1rem; background: #1877f2; color: #fff; border: none; border-radius: 4px; font-size: .9rem; cursor: pointer; }
+  .search button:hover { background: #166fe5; }
+  .search .clear { color: #666; font-size: .85rem; }
   .empty { text-align: center; padding: 3rem 1rem; color: #888; }
   .count { font-size: .85rem; color: #666; margin-bottom: .75rem; }
 </style>
@@ -32,6 +37,12 @@
     <h1>Пользователи</h1>
     <a href="/logout" class="logout">Выйти</a>
   </div>
+
+  <form class="search" method="get">
+    <input type="text" name="q" placeholder="Поиск по ID, имени или username..." value="<%= typeof q !== 'undefined' ? q : '' %>" autofocus>
+    <button type="submit">Найти</button>
+    <% if (typeof q !== 'undefined' && q) { %><a href="/" class="clear">Сбросить</a><% } %>
+  </form>
 
   <div class="count">Всего: <%= users.length %></div>
 

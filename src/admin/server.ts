@@ -50,9 +50,20 @@ app.get("/logout", (req, res) => {
   });
 });
 
-app.get("/", requireAuth, async (_req, res) => {
-  const users = await getAllUsers();
-  res.render("users", { users });
+app.get("/", requireAuth, async (req, res) => {
+  let users = await getAllUsers();
+  const q = (req.query.q as string || "").trim().toLowerCase();
+
+  if (q) {
+    const id = Number(q);
+    users = users.filter(u =>
+      (id && u.userId === id) ||
+      u.firstName?.toLowerCase().includes(q) ||
+      u.username?.toLowerCase().includes(q)
+    );
+  }
+
+  res.render("users", { users, q });
 });
 
 app.post("/ban/:userId", requireAuth, async (req, res) => {
