@@ -7,29 +7,45 @@
 <style>
   * { box-sizing: border-box; }
   body { font: 14px/1.5 sans-serif; margin: 0; padding: 1rem; background: #f0f2f5; }
-  .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; }
-  h1 { margin: 0; font-size: 1.3rem; }
-  a.logout { color: #666; text-decoration: none; font-size: .85rem; }
-  a.logout:hover { text-decoration: underline; }
-  table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
-  th, td { padding: .6rem .75rem; text-align: left; border-bottom: 1px solid #eee; }
+
+  .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: .75rem; flex-wrap: wrap; gap: .5rem; }
+  h1 { margin: 0; font-size: 1.2rem; }
+  .logout { color: #666; text-decoration: none; font-size: .85rem; }
+  .logout:hover { text-decoration: underline; }
+
+  .search { display: flex; gap: .5rem; margin-bottom: .75rem; align-items: center; flex-wrap: wrap; }
+  .search input { flex: 1; min-width: 140px; padding: .5rem .75rem; border: 1px solid #ccc; border-radius: 4px; font-size: 16px; }
+  .search button { padding: .5rem 1rem; background: #1877f2; color: #fff; border: none; border-radius: 4px; font-size: .9rem; cursor: pointer; }
+  .search button:hover { background: #166fe5; }
+  .search .clear { color: #666; font-size: .85rem; }
+
+  .count { font-size: .85rem; color: #666; margin-bottom: .75rem; }
+
+  .wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.1); min-width: 600px; }
+  th, td { padding: .6rem .75rem; text-align: left; border-bottom: 1px solid #eee; white-space: nowrap; }
   th { background: #f7f7f7; font-weight: 600; font-size: .8rem; text-transform: uppercase; color: #555; }
   tr:hover { background: #fafafa; }
-  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: .75rem; font-weight: 600; }
+
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 10px; font-size: .75rem; font-weight: 600; }
   .badge-banned { background: #ffebee; color: #c62828; }
   .badge-active { background: #e8f5e9; color: #2e7d32; }
-  .btn { display: inline-block; padding: .35rem .75rem; border: none; border-radius: 4px; font-size: .8rem; cursor: pointer; text-decoration: none; color: #fff; }
+
+  .btn { display: inline-block; padding: .4rem .85rem; border: none; border-radius: 4px; font-size: .85rem; cursor: pointer; color: #fff; text-decoration: none; }
   .btn-ban { background: #d32f2f; }
   .btn-ban:hover { background: #b71c1c; }
   .btn-unban { background: #388e3c; }
   .btn-unban:hover { background: #1b5e20; }
-  .search { display: flex; gap: .5rem; margin-bottom: .75rem; align-items: center; }
-  .search input { flex: 1; padding: .5rem .75rem; border: 1px solid #ccc; border-radius: 4px; font-size: .9rem; }
-  .search button { padding: .5rem 1rem; background: #1877f2; color: #fff; border: none; border-radius: 4px; font-size: .9rem; cursor: pointer; }
-  .search button:hover { background: #166fe5; }
-  .search .clear { color: #666; font-size: .85rem; }
+
   .empty { text-align: center; padding: 3rem 1rem; color: #888; }
-  .count { font-size: .85rem; color: #666; margin-bottom: .75rem; }
+
+  @media (max-width: 600px) {
+    body { padding: .5rem; }
+    th, td { padding: .4rem .5rem; font-size: .8rem; }
+    .btn { padding: .35rem .65rem; font-size: .8rem; }
+    .search input { font-size: 16px; }
+    .search button { padding: .5rem .75rem; }
+  }
 </style>
 </head>
 <body>
@@ -46,6 +62,7 @@
 
   <div class="count">Всего: <%= users.length %></div>
 
+  <div class="wrap">
   <table>
     <thead>
       <tr>
@@ -91,5 +108,6 @@
       <% }) %>
     </tbody>
   </table>
+  </div>
 </body>
 </html>
