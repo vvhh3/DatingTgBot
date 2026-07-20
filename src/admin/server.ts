@@ -77,7 +77,7 @@ app.post("/unban/:userId", requireAuth, async (req, res) => {
 
 if (config.adminPassword) {
   app.listen(config.port, () => {
-    console.log(`Admin panel: http://0.0.0.0:${config.port}`);
+    console.log(`Admin panel: http://localhost:${config.port}`);
   });
 } else {
   console.log("Admin panel disabled (set ADMIN_PASSWORD to enable)");
