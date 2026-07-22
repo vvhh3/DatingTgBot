@@ -40,7 +40,7 @@ app.post("/login", (req, res) => {
     (req.session as any).authenticated = true;
     res.redirect("/");
   } else {
-    res.render("login", { error: "Неверный пароль" });
+    res.render("login", { error: "пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ" });
   }
 });
 
@@ -95,7 +95,7 @@ app.post("/unban/:userId", requireAuth, async (req, res) => {
 
 if (config.adminPassword) {
   app.listen(config.port, () => {
-    console.log(Admin panel: http://localhost:);
+    console.log(`Admin panel: http://localhost:${config.port}`);
   });
 } else {
   console.log("Admin panel disabled (set ADMIN_PASSWORD to enable)");
