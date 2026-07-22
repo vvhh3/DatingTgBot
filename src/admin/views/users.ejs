@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>РџРѕР»СЊР·РѕРІР°С‚РµР»Рё</title>
+<title>Пользователи</title>
 <style>
   * { box-sizing: border-box; }
   body { font: 14px/1.5 sans-serif; margin: 0; padding: 1rem; background: #f0f2f5; }
@@ -15,6 +15,7 @@
 
   .search { display: flex; gap: .5rem; margin-bottom: .75rem; align-items: center; flex-wrap: wrap; }
   .search input { flex: 1; min-width: 140px; padding: .5rem .75rem; border: 1px solid #ccc; border-radius: 4px; font-size: 16px; }
+  .search select { padding: .5rem .75rem; border: 1px solid #ccc; border-radius: 4px; font-size: .9rem; background: #fff; }
   .search button { padding: .5rem 1rem; background: #1877f2; color: #fff; border: none; border-radius: 4px; font-size: .9rem; cursor: pointer; }
   .search button:hover { background: #166fe5; }
   .search .clear { color: #666; font-size: .85rem; }
@@ -51,57 +52,62 @@
 </head>
 <body>
   <div class="header">
-    <h1>РџРѕР»СЊР·РѕРІР°С‚РµР»Рё</h1>
-    <a href="/logout" class="logout">Р’С‹Р№С‚Рё</a>
+    <h1>Пользователи</h1>
+    <a href="/logout" class="logout">Выйти</a>
   </div>
 
   <form class="search" method="get">
-    <input type="text" name="q" placeholder="РџРѕРёСЃРє РїРѕ ID, РёРјРµРЅРё РёР»Рё username..." value="<%= typeof q !== 'undefined' ? q : '' %>" autofocus>
-    <button type="submit">РќР°Р№С‚Рё</button>
-    <% if (typeof q !== 'undefined' && q) { %><a href="/" class="clear">РЎР±СЂРѕСЃРёС‚СЊ</a><% } %>
+    <input type="text" name="q" placeholder="Поиск по ID, имени или username..." value="<%= typeof q !== 'undefined' ? q : '' %>" autofocus>
+    <select name="status">
+      <option value="all" <%= (typeof status === 'undefined' || status === 'all') ? 'selected' : '' %>>Все</option>
+      <option value="active" <%= status === 'active' ? 'selected' : '' %>>Активные</option>
+      <option value="banned" <%= status === 'banned' ? 'selected' : '' %>>Забаненные</option>
+    </select>
+    <button type="submit">Найти</button>
+    <% if ((typeof q !== 'undefined' && q) || (typeof status !== 'undefined' && status !== 'all')) { %><a href="/" class="clear">Сбросить</a><% } %>
   </form>
 
-  <div class="count">Р’СЃРµРіРѕ: <%= users.length %></div>
+  <div class="count">Всего: <%= users.length %></div>
 
   <div class="wrap">
   <table>
     <thead>
       <tr>
         <th>ID</th>
-        <th>РРјСЏ</th>
+        <th>Имя</th>
         <th>Username</th>
-        <th>РџРѕСЃС‚РѕРІ</th>
-        <th>РџРѕСЃР»РµРґРЅРёР№ РїРѕСЃС‚</th>
-        <th>РЎС‚Р°С‚СѓСЃ</th>
+        <th>Постов</th>
+        <th>Последний пост</th>
+        <th>Статус</th>
         <th></th>
       </tr>
     </thead>
     <tbody>
       <% if (users.length === 0) { %>
-        <tr><td colspan="7" class="empty">РџРѕРєР° РЅРµС‚ РїРѕР»СЊР·РѕРІР°С‚РµР»РµР№</td></tr>
+        <tr><td colspan="7" class="empty">Пока нет пользователей</td></tr>
       <% } %>
       <% users.forEach(u => { %>
         <tr>
           <td><%= u.userId %></td>
-          <td><%= u.firstName || 'вЂ”' %></td>
-          <td><%= u.username ? '@' + u.username : 'вЂ”' %></td>
+          <td><%= u.firstName || '—' %></td>
+          <td><%= u.username ? '@' + u.username : '—' %></td>
           <td><%= u.submissionsCount %></td>
-          <td><%= u.lastSubmissionAt ? new Date(u.lastSubmissionAt).toLocaleString() : 'вЂ”' %></td>
+          <td><%= u.lastSubmissionAt ? new Date(u.lastSubmissionAt).toLocaleString() : '—' %></td>
           <td>
             <% if (u.isBanned) { %>
-              <span class="badge badge-banned">Р—Р°Р±Р°РЅРµРЅ</span>
+              <span class="badge badge-banned">Забанен</span>
             <% } else { %>
-              <span class="badge badge-active">РђРєС‚РёРІРµРЅ</span>
+              <span class="badge badge-active">Активен</span>
             <% } %>
           </td>
           <td>
             <% if (u.isBanned) { %>
               <form method="post" action="/unban/<%= u.userId %>" style="display:inline">
-                <button class="btn btn-unban">Р Р°Р·Р±Р°РЅРёС‚СЊ</button>
+                <button class="btn btn-unban">Разбанить</button>
               </form>
             <% } else { %>
               <form method="post" action="/ban/<%= u.userId %>" style="display:inline">
-                <button class="btn btn-ban">Р—Р°Р±Р°РЅРёС‚СЊ</button>
+                <button class="btn btn-ban">Забанить</button>
               </form>
             <% } %>
           </td>
