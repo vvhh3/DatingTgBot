@@ -53,6 +53,7 @@ app.get("/logout", (req, res) => {
 app.get("/", requireAuth, async (req, res) => {
   let users = await getAllUsers();
   const q = (req.query.q as string || "").trim().toLowerCase();
+  const status = (req.query.status as string || "all").trim().toLowerCase();
 
   if (q) {
     const id = Number(q);
@@ -63,7 +64,13 @@ app.get("/", requireAuth, async (req, res) => {
     );
   }
 
-  res.render("users", { users, q });
+  if (status === "banned") {
+    users = users.filter(u => u.isBanned);
+  } else if (status === "active") {
+    users = users.filter(u => !u.isBanned);
+  }
+
+  res.render("users", { users, q, status });
 });
 
 app.post("/ban/:userId", requireAuth, async (req, res) => {

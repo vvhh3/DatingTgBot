@@ -25,6 +25,7 @@
   .btn-unban:hover { background: #1b5e20; }
   .search { display: flex; gap: .5rem; margin-bottom: .75rem; align-items: center; }
   .search input { flex: 1; padding: .5rem .75rem; border: 1px solid #ccc; border-radius: 4px; font-size: .9rem; }
+  .search select { padding: .5rem .75rem; border: 1px solid #ccc; border-radius: 4px; font-size: .9rem; background: #fff; }
   .search button { padding: .5rem 1rem; background: #1877f2; color: #fff; border: none; border-radius: 4px; font-size: .9rem; cursor: pointer; }
   .search button:hover { background: #166fe5; }
   .search .clear { color: #666; font-size: .85rem; }
@@ -40,8 +41,13 @@
 
   <form class="search" method="get">
     <input type="text" name="q" placeholder="Поиск по ID, имени или username..." value="<%= typeof q !== 'undefined' ? q : '' %>" autofocus>
+    <select name="status">
+      <option value="all" <%= (typeof status === 'undefined' || status === 'all') ? 'selected' : '' %>>Все</option>
+      <option value="active" <%= status === 'active' ? 'selected' : '' %>>Активные</option>
+      <option value="banned" <%= status === 'banned' ? 'selected' : '' %>>Забаненные</option>
+    </select>
     <button type="submit">Найти</button>
-    <% if (typeof q !== 'undefined' && q) { %><a href="/" class="clear">Сбросить</a><% } %>
+    <% if ((typeof q !== 'undefined' && q) || (typeof status !== 'undefined' && status !== 'all')) { %><a href="/" class="clear">Сбросить</a><% } %>
   </form>
 
   <div class="count">Всего: <%= users.length %></div>
